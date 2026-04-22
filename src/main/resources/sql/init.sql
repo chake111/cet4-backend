@@ -44,7 +44,7 @@ CREATE TABLE `question` (
     `option_b`        VARCHAR(500),
     `option_c`        VARCHAR(500),
     `option_d`        VARCHAR(500),
-    `correct_answer`  VARCHAR(10),
+    `correct_answer`  VARCHAR(20),
     `score`           INT NOT NULL,
     `audio_url`       VARCHAR(300) DEFAULT NULL,
     `sort_order`      INT NOT NULL,
