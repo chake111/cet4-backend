@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: cet4-backend
+  profiles:
+    active: dev
+
+jwt:
+  secret: cet4-platform-jwt-secret-key-1234567890
+  expiration: 86400000
