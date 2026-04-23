@@ -1,5 +1,7 @@
 package com.cet4.platform.service;
 
+import com.cet4.platform.dto.SubmitAnswerDTO;
+import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
 
@@ -13,4 +15,8 @@ public interface ExamService {
     List<QuestionVO> listExamQuestions(Long examId);
 
     Map<String, Long> startExam(Long examId, String username);
+
+    Map<String, Object> submitExamRecord(Long recordId, String username, SubmitAnswerDTO submitAnswerDTO);
+
+    ExamResultVO getExamResult(Long recordId, String username);
 }
