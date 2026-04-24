@@ -13,7 +13,7 @@ CREATE TABLE `user` (
     `username`    VARCHAR(50) UNIQUE NOT NULL,
     `password`    VARCHAR(100) NOT NULL,
     `avatar`      VARCHAR(200),
-    `role`        VARCHAR(20) DEFAULT 'USER',
+    `role`        VARCHAR(20) DEFAULT 'student',
     `deleted`     TINYINT DEFAULT 0,
     `created_at`  DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -48,6 +48,7 @@ CREATE TABLE `question` (
     `score`           INT NOT NULL,
     `audio_url`       VARCHAR(300) DEFAULT NULL,
     `sort_order`      INT NOT NULL,
+    `deleted`         TINYINT DEFAULT 0,
     `created_at`      DATETIME DEFAULT CURRENT_TIMESTAMP,
     KEY `idx_question_exam_id` (`exam_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

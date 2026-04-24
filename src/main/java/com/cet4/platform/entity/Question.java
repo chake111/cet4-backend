@@ -3,6 +3,7 @@ package com.cet4.platform.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
@@ -52,6 +53,9 @@ public class Question {
 
     @TableField("sort_order")
     private Integer sortOrder;
+
+    @TableLogic
+    private Integer deleted;
 
     @TableField("created_at")
     private LocalDateTime createdAt;

@@ -14,6 +14,8 @@ import java.util.Date;
 @Component
 public class JwtUtils {
 
+    private static final String ROLE_CLAIM = "role";
+
     @Value("${jwt.secret}")
     private String secret;
 
@@ -27,11 +29,12 @@ public class JwtUtils {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(String username) {
+    public String generateToken(String username, String role) {
         Date now = new Date();
         Date expireAt = new Date(now.getTime() + expiration);
         return Jwts.builder()
                 .subject(username)
+                .claim(ROLE_CLAIM, role)
                 .issuedAt(now)
                 .expiration(expireAt)
                 .signWith(secretKey)
@@ -49,6 +52,11 @@ public class JwtUtils {
 
     public String getUsernameFromToken(String token) {
         return parseClaims(token).getSubject();
+    }
+
+    public String getRoleFromToken(String token) {
+        Object role = parseClaims(token).get(ROLE_CLAIM);
+        return role == null ? null : role.toString();
     }
 
     private Claims parseClaims(String token) {
