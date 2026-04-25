@@ -7,3 +7,11 @@ spring:
 jwt:
   secret: cet4-platform-jwt-secret-key-1234567890
   expiration: 2592000000  # 30天，单位毫秒
+
+
+ai:
+  deepseek:
+    api-key: ${DEEPSEEK_API_KEY:sk-placeholder}
+    base-url: https://api.deepseek.com
+    model: deepseek-chat
+    timeout: 30
