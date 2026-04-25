@@ -134,7 +134,10 @@ public class ExamServiceImpl implements ExamService {
             QuestionVO questionVO = new QuestionVO();
             BeanUtils.copyProperties(question, questionVO);
             return questionVO;
-        }).collect(Collectors.groupingBy(QuestionVO::getPart, LinkedHashMap::new, Collectors.toList()));
+        }).collect(Collectors.groupingBy(
+                questionVO -> mapStageKey(questionVO.getPart()),
+                LinkedHashMap::new,
+                Collectors.toList()));
 
         LocalDateTime startedAt = LocalDateTime.now();
         String draftKey = buildDraftKey(user.getId(), request.getPaperId());
@@ -150,6 +153,10 @@ public class ExamServiceImpl implements ExamService {
         result.put("questionsByStage", questionsByStage);
         result.put("startedAt", startedAt);
         return result;
+    }
+
+    private String mapStageKey(String part) {
+        return "reading_c".equals(part) ? "reading" : part;
     }
 
     @Override
