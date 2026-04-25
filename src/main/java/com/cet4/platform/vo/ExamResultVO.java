@@ -3,22 +3,20 @@ package com.cet4.platform.vo;
 import lombok.Data;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Map;
 
 @Data
 public class ExamResultVO {
 
-    private Long examRecordId;
+    private Long recordId;
 
-    private Long examId;
+    private Integer score;
 
-    private LocalDateTime startTime;
+    private Integer total;
 
-    private LocalDateTime submitTime;
+    private String paperId;
 
-    private Integer totalScore;
+    private LocalDateTime submittedAt;
 
-    private String status;
-
-    private List<AnswerDetailVO> answers;
+    private Map<String, Object> answers;
 }

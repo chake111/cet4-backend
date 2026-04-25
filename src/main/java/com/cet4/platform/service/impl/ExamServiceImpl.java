@@ -20,9 +20,8 @@ import com.cet4.platform.mapper.ExamRecordMapper;
 import com.cet4.platform.mapper.QuestionMapper;
 import com.cet4.platform.mapper.UserAnswerMapper;
 import com.cet4.platform.mapper.UserMapper;
-import com.cet4.platform.service.ExamService;
-import com.cet4.platform.vo.AnswerDetailVO;
 import com.cet4.platform.vo.ExamResultVO;
+import com.cet4.platform.service.ExamService;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
 import lombok.RequiredArgsConstructor;
@@ -293,46 +292,18 @@ public class ExamServiceImpl implements ExamService {
         User user = getUserByUsername(username);
         ExamRecord examRecord = getAndValidateExamRecord(recordId, user.getId());
 
-        List<UserAnswer> userAnswers = userAnswerMapper.selectList(new LambdaQueryWrapper<UserAnswer>()
-                .eq(UserAnswer::getExamRecordId, recordId)
-                .eq(UserAnswer::getUserId, user.getId())
-                .orderByAsc(UserAnswer::getId));
-
-        List<Long> questionIds = userAnswers.stream()
-                .map(UserAnswer::getQuestionId)
-                .distinct()
-                .toList();
-
-        Map<Long, Question> questionMap = questionIds.isEmpty()
-                ? Map.of()
-                : questionMapper.selectBatchIds(questionIds).stream()
-                .collect(Collectors.toMap(Question::getId, q -> q));
-
-        List<AnswerDetailVO> answerDetails = userAnswers.stream().map(userAnswer -> {
-            Question question = questionMap.get(userAnswer.getQuestionId());
-            AnswerDetailVO detailVO = new AnswerDetailVO();
-            detailVO.setQuestionId(userAnswer.getQuestionId());
-            detailVO.setUserAnswer(userAnswer.getUserAnswer());
-            detailVO.setIsCorrect(userAnswer.getIsCorrect());
-            detailVO.setScore(userAnswer.getScore());
-            detailVO.setAiFeedback(userAnswer.getAiFeedback());
-            if (question != null) {
-                detailVO.setQuestionNo(question.getQuestionNo());
-                detailVO.setPart(question.getPart());
-                detailVO.setQuestionType(question.getQuestionType());
-                detailVO.setCorrectAnswer(question.getCorrectAnswer());
-            }
-            return detailVO;
-        }).toList();
-
         ExamResultVO resultVO = new ExamResultVO();
-        resultVO.setExamRecordId(examRecord.getId());
-        resultVO.setExamId(examRecord.getExamId());
-        resultVO.setStartTime(examRecord.getStartTime());
-        resultVO.setSubmitTime(examRecord.getSubmitTime());
-        resultVO.setTotalScore(examRecord.getTotalScore());
-        resultVO.setStatus(examRecord.getStatus());
-        resultVO.setAnswers(answerDetails);
+        resultVO.setRecordId(examRecord.getId());
+        resultVO.setScore(examRecord.getTotalScore());
+        resultVO.setTotal(710);
+        resultVO.setPaperId(examRecord.getPaperId());
+        resultVO.setSubmittedAt(examRecord.getSubmitTime());
+
+        Map<String, Object> answerMap = examRecord.getAnswers() == null || examRecord.getAnswers().isBlank()
+                ? Map.of()
+                : fromJson(examRecord.getAnswers(), new TypeReference<>() {
+                });
+        resultVO.setAnswers(answerMap);
         return resultVO;
     }
 
