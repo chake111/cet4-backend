@@ -26,6 +26,7 @@ import com.cet4.platform.service.ExamService;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class ExamServiceImpl implements ExamService {
 
@@ -229,11 +231,13 @@ public class ExamServiceImpl implements ExamService {
                 continue;
             }
 
+            log.info("开始主观题AI评分, questionId={}, questionType={}", question.getId(), questionType);
             int aiScore = aiScoringService.scoreSubjectiveAnswer(
                     questionType,
                     question.getContent(),
                     entry.getValue(),
                     question.getScore() == null ? 0 : question.getScore());
+            log.info("AI评分结果: questionId={}, aiScore={}", question.getId(), aiScore);
             score += aiScore;
         }
 

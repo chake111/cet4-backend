@@ -41,7 +41,10 @@ public class AiScoringServiceImpl implements AiScoringService {
 
     @Override
     public int scoreSubjectiveAnswer(String questionType, String content, String answer, int maxScore) {
+        log.info("AI评分开始调用: questionType={}, maxScore={}, answerLength={}",
+                questionType, maxScore, answer == null ? 0 : answer.length());
         if (maxScore <= 0 || answer == null || answer.isBlank()) {
+            log.info("AI评分跳过: maxScore={}, answer={}", maxScore, answer);
             return 0;
         }
 
