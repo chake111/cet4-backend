@@ -21,6 +21,7 @@ import com.cet4.platform.mapper.QuestionMapper;
 import com.cet4.platform.mapper.UserAnswerMapper;
 import com.cet4.platform.mapper.UserMapper;
 import com.cet4.platform.vo.ExamResultVO;
+import com.cet4.platform.service.AiScoringService;
 import com.cet4.platform.service.ExamService;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
@@ -59,6 +60,7 @@ public class ExamServiceImpl implements ExamService {
     private final UserAnswerMapper userAnswerMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final AiScoringService aiScoringService;
 
     @Override
     public List<ExamVO> listPublishedExams() {
@@ -190,14 +192,45 @@ public class ExamServiceImpl implements ExamService {
             throw new BusinessException("试卷未配置题目");
         }
 
+        Map<String, String> answers = request.getAnswers() == null ? Map.of() : request.getAnswers();
+        Map<Long, Question> questionMap = questions.stream()
+                .collect(Collectors.toMap(Question::getId, q -> q));
+
         int score = 0;
         int total = 0;
         for (Question question : questions) {
-            total += question.getScore() == null ? 0 : question.getScore();
-            String answer = request.getAnswers().get(String.valueOf(question.getId()));
+            int maxScore = question.getScore() == null ? 0 : question.getScore();
+            total += maxScore;
+            String answer = answers.get(String.valueOf(question.getId()));
             if (Objects.equals(normalizeAnswer(answer), normalizeAnswer(question.getCorrectAnswer()))) {
-                score += question.getScore() == null ? 0 : question.getScore();
+                score += maxScore;
             }
+        }
+
+        for (Map.Entry<String, String> entry : answers.entrySet()) {
+            Long questionId;
+            try {
+                questionId = Long.parseLong(entry.getKey());
+            } catch (NumberFormatException ex) {
+                continue;
+            }
+
+            Question question = questionMap.get(questionId);
+            if (question == null) {
+                continue;
+            }
+
+            String questionType = question.getQuestionType();
+            if (!"writing".equalsIgnoreCase(questionType) && !"translation".equalsIgnoreCase(questionType)) {
+                continue;
+            }
+
+            int aiScore = aiScoringService.scoreSubjectiveAnswer(
+                    questionType,
+                    question.getContent(),
+                    entry.getValue(),
+                    question.getScore() == null ? 0 : question.getScore());
+            score += aiScore;
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -208,7 +241,7 @@ public class ExamServiceImpl implements ExamService {
         examRecord.setStartTime(now);
         examRecord.setSubmitTime(now);
         examRecord.setTotalScore(score);
-        examRecord.setAnswers(toJson(request.getAnswers()));
+        examRecord.setAnswers(toJson(answers));
         examRecord.setStatus(SUBMITTED);
         examRecordMapper.insert(examRecord);
 
