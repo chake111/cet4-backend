@@ -21,6 +21,9 @@ public class ExamRecord {
     @TableField("exam_id")
     private Long examId;
 
+    @TableField("paper_id")
+    private String paperId;
+
     @TableField("start_time")
     private LocalDateTime startTime;
 
@@ -29,6 +32,8 @@ public class ExamRecord {
 
     @TableField("total_score")
     private Integer totalScore;
+
+    private String answers;
 
     private String status;
 
