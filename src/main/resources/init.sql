@@ -87,3 +87,9 @@ CREATE TABLE `user_answer` (
     KEY `idx_user_answer_question_id` (`question_id`),
     UNIQUE KEY `uk_user_answer_record_question` (`exam_record_id`, `question_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Mock 题目数据：补充 listening 题目
+INSERT INTO question (exam_id, part, question_no, question_type, content, option_a, option_b, option_c, option_d, correct_answer, score, sort_order)
+VALUES
+(1, 'listening', 1, 'single_choice', 'What does the woman suggest the man do?', 'Take a rest', 'See a doctor', 'Call his friend', 'Go to class', 'B', 7, 101),
+(1, 'listening', 2, 'single_choice', 'Where does the conversation probably take place?', 'In a library', 'In a hospital', 'In a classroom', 'In a restaurant', 'A', 7, 102);

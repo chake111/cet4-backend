@@ -156,7 +156,10 @@ public class ExamServiceImpl implements ExamService {
     }
 
     private String mapStageKey(String part) {
-        return "reading_c".equals(part) ? "reading" : part;
+        if (part != null && part.startsWith("reading")) {
+            return "reading";
+        }
+        return part;
     }
 
     @Override
