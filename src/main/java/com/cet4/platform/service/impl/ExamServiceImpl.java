@@ -201,6 +201,10 @@ public class ExamServiceImpl implements ExamService {
         for (Question question : questions) {
             int maxScore = question.getScore() == null ? 0 : question.getScore();
             total += maxScore;
+            String qt = question.getQuestionType();
+            if ("writing".equalsIgnoreCase(qt) || "translation".equalsIgnoreCase(qt)) {
+                continue;
+            }
             String answer = answers.get(String.valueOf(question.getId()));
             if (Objects.equals(normalizeAnswer(answer), normalizeAnswer(question.getCorrectAnswer()))) {
                 score += maxScore;
