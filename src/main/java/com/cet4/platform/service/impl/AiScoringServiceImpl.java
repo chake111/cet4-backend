@@ -41,10 +41,7 @@ public class AiScoringServiceImpl implements AiScoringService {
 
     @Override
     public int scoreSubjectiveAnswer(String questionType, String content, String answer, int maxScore) {
-        log.info("AI评分开始调用: questionType={}, maxScore={}, answerLength={}",
-                questionType, maxScore, answer == null ? 0 : answer.length());
         if (maxScore <= 0 || answer == null || answer.isBlank()) {
-            log.info("AI评分跳过: maxScore={}, answer={}", maxScore, answer);
             return 0;
         }
 
@@ -80,7 +77,9 @@ public class AiScoringServiceImpl implements AiScoringService {
             if (parsedScore == null) {
                 return 0;
             }
-            return Math.max(0, Math.min(parsedScore, maxScore));
+            int finalScore = Math.max(0, Math.min(parsedScore, maxScore));
+            log.info("AI评分完成: questionType={}, maxScore={}, score={}", questionType, maxScore, finalScore);
+            return finalScore;
         } catch (Exception ex) {
             log.warn("AI评分失败，已降级为0分。questionType={}", questionType, ex);
             return 0;

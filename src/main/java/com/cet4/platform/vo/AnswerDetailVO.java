@@ -13,13 +13,17 @@ public class AnswerDetailVO {
 
     private String questionType;
 
+    private String content;
+
     private String userAnswer;
 
     private String correctAnswer;
 
-    private Integer isCorrect;
+    private Boolean correct;
 
     private Integer score;
+
+    private Integer fullScore;
 
     private String aiFeedback;
 }

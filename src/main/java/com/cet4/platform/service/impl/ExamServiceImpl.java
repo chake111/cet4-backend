@@ -20,6 +20,7 @@ import com.cet4.platform.mapper.ExamRecordMapper;
 import com.cet4.platform.mapper.QuestionMapper;
 import com.cet4.platform.mapper.UserAnswerMapper;
 import com.cet4.platform.mapper.UserMapper;
+import com.cet4.platform.vo.AnswerDetailVO;
 import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.service.AiScoringService;
 import com.cet4.platform.service.ExamService;
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -198,6 +200,10 @@ public class ExamServiceImpl implements ExamService {
         Map<Long, Question> questionMap = questions.stream()
                 .collect(Collectors.toMap(Question::getId, q -> q));
 
+        // Cache per-question scores and correctness to avoid duplicate AI calls
+        Map<Long, Integer> questionScoreMap = new HashMap<>();
+        Map<Long, Boolean> questionCorrectMap = new HashMap<>();
+
         int score = 0;
         int total = 0;
         for (Question question : questions) {
@@ -212,11 +218,13 @@ public class ExamServiceImpl implements ExamService {
                 continue;
             }
             String normalizedUserAnswer = normalizeAnswer(answers.get(String.valueOf(question.getId())));
-            if (normalizedUserAnswer != null
+            boolean correct = normalizedUserAnswer != null
                     && !normalizedUserAnswer.isBlank()
-                    && Objects.equals(normalizedUserAnswer, normalizedCorrectAnswer)) {
-                score += maxScore;
-            }
+                    && Objects.equals(normalizedUserAnswer, normalizedCorrectAnswer);
+            int qScore = correct ? maxScore : 0;
+            score += qScore;
+            questionScoreMap.put(question.getId(), qScore);
+            questionCorrectMap.put(question.getId(), correct);
         }
 
         for (Map.Entry<String, String> entry : answers.entrySet()) {
@@ -237,14 +245,14 @@ public class ExamServiceImpl implements ExamService {
                 continue;
             }
 
-            log.info("开始主观题AI评分, questionId={}, questionType={}", question.getId(), questionType);
             int aiScore = aiScoringService.scoreSubjectiveAnswer(
                     questionType,
                     question.getContent(),
                     entry.getValue(),
                     question.getScore() == null ? 0 : question.getScore());
-            log.info("AI评分结果: questionId={}, aiScore={}", question.getId(), aiScore);
             score += aiScore;
+            questionScoreMap.put(questionId, aiScore);
+            questionCorrectMap.put(questionId, null);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -258,6 +266,35 @@ public class ExamServiceImpl implements ExamService {
         examRecord.setAnswers(toJson(answers));
         examRecord.setStatus(SUBMITTED);
         examRecordMapper.insert(examRecord);
+
+        // Write user_answer records for all questions
+        Long recordId = examRecord.getId();
+        for (Question question : questions) {
+            UserAnswer ua = new UserAnswer();
+            ua.setExamRecordId(recordId);
+            ua.setUserId(user.getId());
+            ua.setQuestionId(question.getId());
+            ua.setUserAnswer(answers.get(String.valueOf(question.getId())));
+            ua.setCreatedAt(now);
+
+            Integer qScore = questionScoreMap.get(question.getId());
+            Boolean qCorrect = questionCorrectMap.get(question.getId());
+
+            ua.setScore(qScore != null ? qScore : 0);
+
+            String qt = question.getQuestionType();
+            boolean subjective = "writing".equalsIgnoreCase(qt) || "translation".equalsIgnoreCase(qt);
+            if (subjective) {
+                ua.setIsCorrect(null);
+                if (qScore != null) {
+                    ua.setAiScore(qScore);
+                }
+            } else {
+                ua.setIsCorrect(Boolean.TRUE.equals(qCorrect) ? 1 : 0);
+            }
+
+            userAnswerMapper.insert(ua);
+        }
 
         stringRedisTemplate.delete(buildDraftKey(user.getId(), request.getPaperId()));
         stringRedisTemplate.delete(buildSessionKey(user.getId()));
@@ -342,15 +379,102 @@ public class ExamServiceImpl implements ExamService {
         ExamResultVO resultVO = new ExamResultVO();
         resultVO.setRecordId(examRecord.getId());
         resultVO.setScore(examRecord.getTotalScore());
-        resultVO.setTotal(710);
         resultVO.setPaperId(examRecord.getPaperId());
         resultVO.setSubmittedAt(examRecord.getSubmitTime());
 
+        // Get exam for total score (instead of hardcoding 710)
+        Exam exam = examMapper.selectById(examRecord.getExamId());
+        resultVO.setTotal(exam != null && exam.getTotalScore() != null ? exam.getTotalScore() : 710);
+
+        // Keep backward compatibility: flat answers map
         Map<String, Object> answerMap = examRecord.getAnswers() == null || examRecord.getAnswers().isBlank()
                 ? Map.of()
                 : fromJson(examRecord.getAnswers(), new TypeReference<>() {
                 });
         resultVO.setAnswers(answerMap);
+
+        // Query all questions for this exam
+        List<Question> questions = questionMapper.selectList(new LambdaQueryWrapper<Question>()
+                .eq(Question::getExamId, examRecord.getExamId())
+                .orderByAsc(Question::getSortOrder));
+
+        // Query user_answer records for this record
+        List<UserAnswer> userAnswers = userAnswerMapper.selectList(new LambdaQueryWrapper<UserAnswer>()
+                .eq(UserAnswer::getExamRecordId, recordId));
+        Map<Long, UserAnswer> userAnswerMap = userAnswers.stream()
+                .collect(Collectors.toMap(UserAnswer::getQuestionId, ua -> ua, (a, b) -> a));
+
+        // Assemble answerDetails and compute statistics
+        List<AnswerDetailVO> answerDetails = new ArrayList<>();
+        int objectiveScore = 0;
+        int subjectiveScore = 0;
+        int objectiveCorrect = 0;
+        int objectiveTotal = 0;
+
+        for (Question question : questions) {
+            AnswerDetailVO detail = new AnswerDetailVO();
+            detail.setQuestionId(question.getId());
+            detail.setQuestionNo(question.getQuestionNo());
+            detail.setPart(question.getPart());
+            detail.setQuestionType(question.getQuestionType());
+            detail.setContent(question.getContent());
+            detail.setFullScore(question.getScore());
+            detail.setCorrectAnswer(question.getCorrectAnswer());
+
+            UserAnswer ua = userAnswerMap.get(question.getId());
+            String qt = question.getQuestionType();
+            boolean subjective = "writing".equalsIgnoreCase(qt) || "translation".equalsIgnoreCase(qt);
+
+            if (ua != null) {
+                detail.setUserAnswer(ua.getUserAnswer());
+                detail.setScore(ua.getScore());
+                detail.setAiFeedback(ua.getAiFeedback());
+                if (subjective) {
+                    detail.setCorrect(null);
+                    subjectiveScore += (ua.getScore() != null ? ua.getScore() : 0);
+                } else {
+                    boolean isCorrect = ua.getIsCorrect() != null && ua.getIsCorrect() == 1;
+                    detail.setCorrect(isCorrect);
+                    objectiveScore += (ua.getScore() != null ? ua.getScore() : 0);
+                    String correctAnswer = question.getCorrectAnswer();
+                    if (correctAnswer != null && !correctAnswer.isBlank()) {
+                        objectiveTotal++;
+                        if (isCorrect) {
+                            objectiveCorrect++;
+                        }
+                    }
+                }
+            } else {
+                // No user_answer record (old records or unanswered)
+                detail.setUserAnswer(null);
+                detail.setScore(0);
+                if (subjective) {
+                    detail.setCorrect(null);
+                } else {
+                    String correctAnswer = question.getCorrectAnswer();
+                    if (correctAnswer != null && !correctAnswer.isBlank()) {
+                        detail.setCorrect(false);
+                        objectiveTotal++;
+                    } else {
+                        detail.setCorrect(null);
+                    }
+                }
+            }
+
+            answerDetails.add(detail);
+        }
+
+        // If no user_answer records exist (old records), compute subjectiveScore from total
+        if (userAnswers.isEmpty() && examRecord.getTotalScore() != null) {
+            subjectiveScore = examRecord.getTotalScore() - objectiveScore;
+        }
+
+        resultVO.setObjectiveScore(objectiveScore);
+        resultVO.setSubjectiveScore(subjectiveScore);
+        resultVO.setObjectiveCorrect(objectiveCorrect);
+        resultVO.setObjectiveTotal(objectiveTotal);
+        resultVO.setAnswerDetails(answerDetails);
+
         return resultVO;
     }
 
