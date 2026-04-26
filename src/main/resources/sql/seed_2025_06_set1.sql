@@ -1,9 +1,9 @@
 -- ============================================================
 -- 2025年6月大学英语四级真题第1套 种子数据
 -- 生成时间：2025-06-01
--- 包含：Writing(1题) + Reading_C(10题) + Translation(1题)
+-- 包含：Writing(1题) + Listening(10题) + Reading_C(10题) + Translation(1题)
 --       + Reading_A(10题) + Reading_B(10题)
--- 合计：32 道题
+-- 合计：42 道题
 -- ============================================================
 
 USE cet4_platform;
@@ -39,7 +39,176 @@ VALUES
 );
 
 -- ============================================================
--- Step 3: Part III Reading Comprehension Section C（第46~55题）
+-- Step 3: Part II Listening Comprehension（第2~11题）
+-- ============================================================
+INSERT INTO `question`
+    (`exam_id`, `part`, `question_no`, `question_type`, `content`, `passage`,
+     `option_a`, `option_b`, `option_c`, `option_d`,
+     `correct_answer`, `score`, `audio_url`, `sort_order`)
+VALUES
+(
+    @exam_id,
+    'listening',
+    2,
+    'single_choice',
+    'What is the short news mainly about?',
+    NULL,
+    'A report on a city marathon.',
+    'A warning about heavy rain tonight.',
+    'A discussion on school lunch plans.',
+    'A notice about museum opening hours.',
+    'B',
+    7,
+    '/audio/listening/set1/section-a-news-1.mp3',
+    33
+),
+(
+    @exam_id,
+    'listening',
+    3,
+    'single_choice',
+    'What are drivers advised to do?',
+    NULL,
+    'Avoid the downtown area after 8 p.m.',
+    'Take the subway instead of driving.',
+    'Slow down and keep a safe distance.',
+    'Park their cars near public shelters.',
+    'C',
+    7,
+    '/audio/listening/set1/section-a-news-1.mp3',
+    34
+),
+(
+    @exam_id,
+    'listening',
+    4,
+    'single_choice',
+    'Why were several flights delayed this morning?',
+    NULL,
+    'A technical problem at the airport tower.',
+    'Strong winds across the coastal region.',
+    'A shortage of airline staff.',
+    'A security drill in Terminal 2.',
+    'B',
+    7,
+    '/audio/listening/set1/section-a-news-2.mp3',
+    35
+),
+(
+    @exam_id,
+    'listening',
+    5,
+    'single_choice',
+    'What did the airport authority announce?',
+    NULL,
+    'Most delayed flights have resumed boarding.',
+    'All flights are canceled for the day.',
+    'Passengers can get free hotel rooms.',
+    'A new runway will open next week.',
+    'A',
+    7,
+    '/audio/listening/set1/section-a-news-2.mp3',
+    36
+),
+(
+    @exam_id,
+    'listening',
+    6,
+    'single_choice',
+    'What are the speakers mainly discussing?',
+    NULL,
+    'How to prepare for a part-time interview.',
+    'Whether to join a weekend volunteer event.',
+    'Which course to choose next semester.',
+    'Where to host the graduation party.',
+    'B',
+    7,
+    '/audio/listening/set1/section-b-conversation-1.mp3',
+    37
+),
+(
+    @exam_id,
+    'listening',
+    7,
+    'single_choice',
+    'What concern does the man express?',
+    NULL,
+    'He may not have enough free time.',
+    'He does not like working with children.',
+    'He cannot find the event location.',
+    'He already promised to attend another activity.',
+    'A',
+    7,
+    '/audio/listening/set1/section-b-conversation-1.mp3',
+    38
+),
+(
+    @exam_id,
+    'listening',
+    8,
+    'single_choice',
+    'What does the woman suggest the man do first?',
+    NULL,
+    'Call the organizer for detailed tasks.',
+    'Ask his classmates to go together.',
+    'Finish his lab report in advance.',
+    'Register online before Friday noon.',
+    'D',
+    7,
+    '/audio/listening/set1/section-b-conversation-1.mp3',
+    39
+),
+(
+    @exam_id,
+    'listening',
+    9,
+    'single_choice',
+    'According to the passage, what helped improve sleep quality?',
+    NULL,
+    'Using phones less before bedtime.',
+    'Drinking warm milk every night.',
+    'Running five kilometers daily.',
+    'Taking short naps after lunch.',
+    'A',
+    7,
+    '/audio/listening/set1/section-c-passage-1.mp3',
+    40
+),
+(
+    @exam_id,
+    'listening',
+    10,
+    'single_choice',
+    'What did the researchers ask participants to record?',
+    NULL,
+    'Their daily meal plans.',
+    'Their exercise intensity.',
+    'Their bedtime routines.',
+    'Their stress at work.',
+    'C',
+    7,
+    '/audio/listening/set1/section-c-passage-1.mp3',
+    41
+),
+(
+    @exam_id,
+    'listening',
+    11,
+    'single_choice',
+    'What is the speaker's final advice?',
+    NULL,
+    'Avoid coffee after lunch.',
+    'Stick to a regular sleep schedule.',
+    'Read printed books before bed.',
+    'Lower room temperature at night.',
+    'B',
+    7,
+    '/audio/listening/set1/section-c-passage-1.mp3',
+    42
+);
+
+-- ============================================================
+-- Step 4: Part III Reading Comprehension Section C（第46~55题）
 -- ============================================================
 
 -- Passage One（第46~50题）
@@ -216,7 +385,7 @@ VALUES
 );
 
 -- ============================================================
--- Step 4: Part IV Translation（翻译题）
+-- Step 5: Part IV Translation（翻译题）
 -- ============================================================
 INSERT INTO `question`
     (`exam_id`, `part`, `question_no`, `question_type`, `content`, `passage`,
@@ -238,7 +407,7 @@ VALUES
 );
 
 -- ============================================================
--- Step 5: Part III Reading Comprehension Section A（第26~35题，选词填空）
+-- Step 6: Part III Reading Comprehension Section A（第26~35题，选词填空）
 -- ============================================================
 -- 词库：A)accepted B)audiences C)building D)complex E)constitutes
 --       F)deputies G)previously H)revolving I)samples J)selected
