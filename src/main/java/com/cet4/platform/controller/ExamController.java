@@ -6,6 +6,7 @@ import com.cet4.platform.dto.ExamStartRequest;
 import com.cet4.platform.dto.ExamSubmitRequest;
 import com.cet4.platform.dto.SubmitAnswerDTO;
 import com.cet4.platform.service.ExamService;
+import com.cet4.platform.vo.ExamRecordVO;
 import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
@@ -76,6 +77,11 @@ public class ExamController {
                                                         @RequestBody SubmitAnswerDTO submitAnswerDTO,
                                                         Authentication authentication) {
         return Result.success(examService.submitExamRecord(recordId, authentication.getName(), submitAnswerDTO));
+    }
+
+    @GetMapping("/records")
+    public Result<List<ExamRecordVO>> listUserRecords(Authentication authentication) {
+        return Result.success(examService.listUserRecords(authentication.getName()));
     }
 
     @GetMapping("/record/{recordId}/result")

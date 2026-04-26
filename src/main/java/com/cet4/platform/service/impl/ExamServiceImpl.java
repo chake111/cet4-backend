@@ -21,6 +21,7 @@ import com.cet4.platform.mapper.QuestionMapper;
 import com.cet4.platform.mapper.UserAnswerMapper;
 import com.cet4.platform.mapper.UserMapper;
 import com.cet4.platform.vo.AnswerDetailVO;
+import com.cet4.platform.vo.ExamRecordVO;
 import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.service.AiScoringResult;
 import com.cet4.platform.service.AiScoringService;
@@ -262,11 +263,27 @@ public class ExamServiceImpl implements ExamService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+
+        // 从 Redis session 读取考试开始时间
+        LocalDateTime startTime = now;
+        String sessionJson = stringRedisTemplate.opsForValue().get(buildSessionKey(user.getId()));
+        if (sessionJson != null && !sessionJson.isBlank()) {
+            try {
+                Map<String, String> session = fromJson(sessionJson, new TypeReference<>() {});
+                String startedAtStr = session.get("startedAt");
+                if (startedAtStr != null && !startedAtStr.isBlank()) {
+                    startTime = LocalDateTime.parse(startedAtStr);
+                }
+            } catch (Exception e) {
+                log.warn("解析 Redis session startedAt 失败，使用当前时间作为 startTime", e);
+            }
+        }
+
         ExamRecord examRecord = new ExamRecord();
         examRecord.setUserId(user.getId());
         examRecord.setExamId(examId);
         examRecord.setPaperId(request.getPaperId());
-        examRecord.setStartTime(now);
+        examRecord.setStartTime(startTime);
         examRecord.setSubmitTime(now);
         examRecord.setTotalScore(score);
         examRecord.setAnswers(toJson(answers));
@@ -390,6 +407,7 @@ public class ExamServiceImpl implements ExamService {
         resultVO.setRecordId(examRecord.getId());
         resultVO.setScore(examRecord.getTotalScore());
         resultVO.setPaperId(examRecord.getPaperId());
+        resultVO.setStartTime(examRecord.getStartTime());
         resultVO.setSubmittedAt(examRecord.getSubmitTime());
 
         // Get exam for total score (instead of hardcoding 710)
@@ -559,6 +577,38 @@ public class ExamServiceImpl implements ExamService {
         } catch (JsonProcessingException ex) {
             throw new BusinessException("JSON 序列化失败");
         }
+    }
+
+    @Override
+    public List<ExamRecordVO> listUserRecords(String username) {
+        User user = getUserByUsername(username);
+
+        List<ExamRecord> records = examRecordMapper.selectList(
+            new LambdaQueryWrapper<ExamRecord>()
+                .eq(ExamRecord::getUserId, user.getId())
+                .eq(ExamRecord::getStatus, SUBMITTED)
+                .orderByDesc(ExamRecord::getCreatedAt)
+        );
+
+        return records.stream().map(record -> {
+            ExamRecordVO vo = new ExamRecordVO();
+            vo.setRecordId(record.getId());
+            vo.setTotalScore(record.getTotalScore());
+            vo.setStatus(record.getStatus());
+            vo.setStartTime(record.getStartTime());
+            vo.setSubmitTime(record.getSubmitTime());
+
+            Exam exam = examMapper.selectById(record.getExamId());
+            if (exam != null) {
+                vo.setTitle(exam.getTitle());
+                vo.setYear(exam.getYear());
+                vo.setMonth(exam.getMonth());
+                vo.setSetNo(exam.getSetNo());
+                vo.setFullScore(exam.getTotalScore());
+            }
+
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     private <T> T fromJson(String json, TypeReference<T> typeReference) {

@@ -4,6 +4,7 @@ import com.cet4.platform.dto.SubmitAnswerDTO;
 import com.cet4.platform.dto.ExamDraftSaveRequest;
 import com.cet4.platform.dto.ExamStartRequest;
 import com.cet4.platform.dto.ExamSubmitRequest;
+import com.cet4.platform.vo.ExamRecordVO;
 import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
@@ -28,4 +29,6 @@ public interface ExamService {
     Map<String, Object> submitExamRecord(Long recordId, String username, SubmitAnswerDTO submitAnswerDTO);
 
     ExamResultVO getExamResult(Long recordId, String username);
+
+    List<ExamRecordVO> listUserRecords(String username);
 }

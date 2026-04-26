@@ -25,6 +25,8 @@ public class ExamResultVO {
 
     private String paperId;
 
+    private LocalDateTime startTime;
+
     private LocalDateTime submittedAt;
 
     private Map<String, Object> answers;
