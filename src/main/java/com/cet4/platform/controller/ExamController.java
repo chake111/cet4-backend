@@ -40,6 +40,11 @@ public class ExamController {
         return Result.success(examService.listExamQuestions(examId));
     }
 
+    /**
+     * @deprecated 旧接口 POST /exam/{id}/start 已不再被前端调用，后续可删除。
+     * 前端统一使用 POST /exam/start（startExamSession）作为唯一考试启动入口。
+     */
+    @Deprecated
     @PostMapping("/{id}/start")
     public Result<Map<String, Long>> startExam(@PathVariable("id") Long examId, Authentication authentication) {
         return Result.success(examService.startExam(examId, authentication.getName()));
