@@ -207,8 +207,14 @@ public class ExamServiceImpl implements ExamService {
             if ("writing".equalsIgnoreCase(qt) || "translation".equalsIgnoreCase(qt)) {
                 continue;
             }
-            String answer = answers.get(String.valueOf(question.getId()));
-            if (Objects.equals(normalizeAnswer(answer), normalizeAnswer(question.getCorrectAnswer()))) {
+            String normalizedCorrectAnswer = normalizeAnswer(question.getCorrectAnswer());
+            if (normalizedCorrectAnswer == null || normalizedCorrectAnswer.isBlank()) {
+                continue;
+            }
+            String normalizedUserAnswer = normalizeAnswer(answers.get(String.valueOf(question.getId())));
+            if (normalizedUserAnswer != null
+                    && !normalizedUserAnswer.isBlank()
+                    && Objects.equals(normalizedUserAnswer, normalizedCorrectAnswer)) {
                 score += maxScore;
             }
         }
