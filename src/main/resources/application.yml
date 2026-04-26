@@ -5,7 +5,7 @@ spring:
     active: dev
 
 jwt:
-  secret: cet4-platform-jwt-secret-key-1234567890
+  secret: ${JWT_SECRET:cet4-platform-jwt-secret-key-1234567890}
   expiration: 2592000000  # 30天，单位毫秒
 
 
