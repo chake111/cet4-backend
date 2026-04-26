@@ -1,5 +1,6 @@
 package com.cet4.platform.service.impl;
 
+import com.cet4.platform.service.AiScoringResult;
 import com.cet4.platform.service.AiScoringService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,8 @@ public class AiScoringServiceImpl implements AiScoringService {
     private static final String WRITING = "writing";
     private static final String TRANSLATION = "translation";
     private static final Pattern SCORE_PATTERN = Pattern.compile("\\d+");
+    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("```(?:json)?\\s*\\n?(\\{[\\s\\S]*?\\})\\s*\\n?```", Pattern.MULTILINE);
+    private static final Pattern JSON_OBJECT_PATTERN = Pattern.compile("\\{[\\s\\S]*\\}");
 
     private RestTemplate restTemplate;
 
@@ -40,9 +43,9 @@ public class AiScoringServiceImpl implements AiScoringService {
 
 
     @Override
-    public int scoreSubjectiveAnswer(String questionType, String content, String answer, int maxScore) {
+    public AiScoringResult scoreSubjectiveAnswer(String questionType, String content, String answer, int maxScore) {
         if (maxScore <= 0 || answer == null || answer.isBlank()) {
-            return 0;
+            return AiScoringResult.fail();
         }
 
         try {
@@ -69,20 +72,17 @@ public class AiScoringServiceImpl implements AiScoringService {
             ResponseEntity<Map> response = restTemplate.postForEntity(baseUrl + "/v1/chat/completions", requestEntity, Map.class);
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                return 0;
+                return AiScoringResult.fail();
             }
 
             String responseContent = extractContent(response.getBody());
-            Integer parsedScore = parseScore(responseContent);
-            if (parsedScore == null) {
-                return 0;
-            }
-            int finalScore = Math.max(0, Math.min(parsedScore, maxScore));
-            log.info("AI评分完成: questionType={}, maxScore={}, score={}", questionType, maxScore, finalScore);
-            return finalScore;
+            AiScoringResult result = parseScoringResult(responseContent, maxScore);
+            log.info("AI评分完成: questionType={}, maxScore={}, score={}, hasFeedback={}",
+                    questionType, maxScore, result.getScore(), result.getFeedback() != null);
+            return result;
         } catch (Exception ex) {
             log.warn("AI评分失败，已降级为0分。questionType={}", questionType, ex);
-            return 0;
+            return AiScoringResult.fail();
         }
     }
 
@@ -94,11 +94,25 @@ public class AiScoringServiceImpl implements AiScoringService {
                     + "- 忠实原文（50%）：是否准确传达原文意思\n"
                     + "- 语言表达（30%）：英语是否地道流畅\n"
                     + "- 词汇语法（20%）：用词和语法是否正确\n\n"
+                    + "特别规则：\n"
+                    + "- 如果答案是乱码、随机字母、无意义内容，直接给 0 分\n"
+                    + "- 如果答案与原文完全无关，最高给 5 分\n\n"
                     + "题目要求：\n"
                     + (content == null ? "" : content) + "\n\n"
                     + "学生答案：\n"
                     + answer + "\n\n"
-                    + "满分为 " + maxScore + " 分，请给出一个整数分数，只输出数字，不要有任何其他内容。";
+                    + "满分为 " + maxScore + " 分。\n"
+                    + "请严格按以下 JSON 格式返回，不要输出 Markdown，不要输出代码块，不要输出任何其他内容：\n\n"
+                    + "{\n"
+                    + "  \"score\": 85,\n"
+                    + "  \"feedback\": {\n"
+                    + "    \"overall\": \"总体评价，2到3句话。\",\n"
+                    + "    \"accuracy\": \"准确性评价。\",\n"
+                    + "    \"expression\": \"语言表达评价。\",\n"
+                    + "    \"weaknesses\": [\"主要问题1\", \"主要问题2\"],\n"
+                    + "    \"suggestions\": [\"修改建议1\", \"修改建议2\"]\n"
+                    + "  }\n"
+                    + "}";
         }
 
         return "你是一位专业的大学英语四级考试评卷老师。\n"
@@ -107,11 +121,25 @@ public class AiScoringServiceImpl implements AiScoringService {
                 + "- 内容（40%）：是否切题，论点是否充分\n"
                 + "- 语言（40%）：语法、词汇、句式是否准确丰富\n"
                 + "- 结构（20%）：段落是否清晰，逻辑是否连贯\n\n"
+                + "特别规则：\n"
+                + "- 如果答案是乱码、随机字母、无意义内容，直接给 0 分\n"
+                + "- 如果答案少于 20 个英文单词，最高给 20 分\n"
+                + "- 如果答案与题目完全无关，最高给 10 分\n\n"
                 + "题目要求：\n"
                 + (content == null ? "" : content) + "\n\n"
                 + "学生答案：\n"
                 + answer + "\n\n"
-                + "满分为 " + maxScore + " 分，请给出一个整数分数，只输出数字，不要有任何其他内容。";
+                + "满分为 " + maxScore + " 分。\n"
+                + "请严格按以下 JSON 格式返回，不要输出 Markdown，不要输出代码块，不要输出任何其他内容：\n\n"
+                + "{\n"
+                + "  \"score\": 85,\n"
+                + "  \"feedback\": {\n"
+                + "    \"overall\": \"总体评价，2到3句话。\",\n"
+                + "    \"strengths\": [\"优点1\", \"优点2\"],\n"
+                + "    \"weaknesses\": [\"问题1\", \"问题2\"],\n"
+                + "    \"suggestions\": [\"改进建议1\", \"改进建议2\"]\n"
+                + "  }\n"
+                + "}";
     }
 
     private String extractContent(Map responseBody) {
@@ -134,14 +162,74 @@ public class AiScoringServiceImpl implements AiScoringService {
         return contentObj == null ? "" : String.valueOf(contentObj);
     }
 
-    private Integer parseScore(String content) {
+    /**
+     * 解析 AI 返回的评分结果。
+     * 支持以下格式：
+     * 1. 纯 JSON 对象
+     * 2. ```json ... ``` 代码块包裹的 JSON
+     * 3. 纯数字（向后兼容）
+     */
+    private AiScoringResult parseScoringResult(String content, int maxScore) {
         if (content == null || content.isBlank()) {
-            return null;
+            return AiScoringResult.fail();
         }
-        Matcher matcher = SCORE_PATTERN.matcher(content);
-        if (!matcher.find()) {
-            return null;
+
+        String jsonStr = null;
+
+        // 1. 尝试提取 ```json ... ``` 代码块
+        Matcher blockMatcher = JSON_BLOCK_PATTERN.matcher(content.trim());
+        if (blockMatcher.find()) {
+            jsonStr = blockMatcher.group(1).trim();
         }
-        return Integer.parseInt(matcher.group());
+
+        // 2. 如果没有代码块，尝试直接提取 JSON 对象
+        if (jsonStr == null) {
+            Matcher objectMatcher = JSON_OBJECT_PATTERN.matcher(content.trim());
+            if (objectMatcher.find()) {
+                jsonStr = objectMatcher.group().trim();
+            }
+        }
+
+        // 3. 如果提取到了 JSON，尝试解析 score 和 feedback
+        if (jsonStr != null) {
+            try {
+                // 使用简单的正则提取 score
+                Matcher scoreMatcher = Pattern.compile("\"score\"\\s*:\\s*(\\d+)").matcher(jsonStr);
+                int score = 0;
+                if (scoreMatcher.find()) {
+                    score = Integer.parseInt(scoreMatcher.group(1));
+                    score = Math.max(0, Math.min(score, maxScore));
+                }
+
+                // 提取 feedback 对象作为字符串
+                String feedbackJson = null;
+                Matcher feedbackMatcher = Pattern.compile("\"feedback\"\\s*:\\s*(\\{[\\s\\S]*?\\})\\s*\\}?$").matcher(jsonStr);
+                if (feedbackMatcher.find()) {
+                    feedbackJson = feedbackMatcher.group(1).trim();
+                }
+
+                // 如果 feedback 提取失败，尝试把整个 feedback 部分提取出来
+                if (feedbackJson == null) {
+                    Matcher feedbackObjMatcher = Pattern.compile("\"feedback\"\\s*:\\s*(\\{[^{}]*(?:\\{[^{}]*\\}[^{}]*)*\\})").matcher(jsonStr);
+                    if (feedbackObjMatcher.find()) {
+                        feedbackJson = feedbackObjMatcher.group(1).trim();
+                    }
+                }
+
+                return AiScoringResult.of(score, feedbackJson);
+            } catch (Exception ex) {
+                log.warn("解析 AI 返回的 JSON 失败，尝试降级为纯数字解析。content={}", content, ex);
+            }
+        }
+
+        // 4. 向后兼容：纯数字解析
+        Matcher scoreMatcher = SCORE_PATTERN.matcher(content);
+        if (scoreMatcher.find()) {
+            int score = Integer.parseInt(scoreMatcher.group());
+            score = Math.max(0, Math.min(score, maxScore));
+            return AiScoringResult.of(score, null);
+        }
+
+        return AiScoringResult.fail();
     }
 }

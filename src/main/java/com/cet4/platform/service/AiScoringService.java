@@ -9,7 +9,7 @@ public interface AiScoringService {
      * @param content      题目要求
      * @param answer       学生答案
      * @param maxScore     该题满分
-     * @return AI 给出的分数（0 ~ maxScore）
+     * @return AI 评分结果（包含分数和评语）
      */
-    int scoreSubjectiveAnswer(String questionType, String content, String answer, int maxScore);
+    AiScoringResult scoreSubjectiveAnswer(String questionType, String content, String answer, int maxScore);
 }

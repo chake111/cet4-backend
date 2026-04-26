@@ -22,6 +22,7 @@ import com.cet4.platform.mapper.UserAnswerMapper;
 import com.cet4.platform.mapper.UserMapper;
 import com.cet4.platform.vo.AnswerDetailVO;
 import com.cet4.platform.vo.ExamResultVO;
+import com.cet4.platform.service.AiScoringResult;
 import com.cet4.platform.service.AiScoringService;
 import com.cet4.platform.service.ExamService;
 import com.cet4.platform.vo.ExamVO;
@@ -200,9 +201,10 @@ public class ExamServiceImpl implements ExamService {
         Map<Long, Question> questionMap = questions.stream()
                 .collect(Collectors.toMap(Question::getId, q -> q));
 
-        // Cache per-question scores and correctness to avoid duplicate AI calls
+        // Cache per-question scores, correctness and AI feedback to avoid duplicate AI calls
         Map<Long, Integer> questionScoreMap = new HashMap<>();
         Map<Long, Boolean> questionCorrectMap = new HashMap<>();
+        Map<Long, String> questionFeedbackMap = new HashMap<>();
 
         int score = 0;
         int total = 0;
@@ -245,14 +247,18 @@ public class ExamServiceImpl implements ExamService {
                 continue;
             }
 
-            int aiScore = aiScoringService.scoreSubjectiveAnswer(
+            AiScoringResult aiResult = aiScoringService.scoreSubjectiveAnswer(
                     questionType,
                     question.getContent(),
                     entry.getValue(),
                     question.getScore() == null ? 0 : question.getScore());
+            int aiScore = aiResult.getScore();
             score += aiScore;
             questionScoreMap.put(questionId, aiScore);
             questionCorrectMap.put(questionId, null);
+            if (aiResult.getFeedback() != null) {
+                questionFeedbackMap.put(questionId, aiResult.getFeedback());
+            }
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -288,6 +294,10 @@ public class ExamServiceImpl implements ExamService {
                 ua.setIsCorrect(null);
                 if (qScore != null) {
                     ua.setAiScore(qScore);
+                }
+                String qFeedback = questionFeedbackMap.get(question.getId());
+                if (qFeedback != null) {
+                    ua.setAiFeedback(qFeedback);
                 }
             } else {
                 ua.setIsCorrect(Boolean.TRUE.equals(qCorrect) ? 1 : 0);
