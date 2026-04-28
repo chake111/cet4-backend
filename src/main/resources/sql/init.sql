@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS cet4_platform DEFAULT CHARSET utf8mb4;
 USE cet4_platform;
 

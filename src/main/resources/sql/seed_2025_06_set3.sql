@@ -13,6 +13,7 @@
 -- https://cet4-audio.oss-cn-guangzhou.aliyuncs.com/audio/cet4/2025/06/set3/2025%E5%B9%B46%E6%9C%88%E5%9B%9B%E7%BA%A7%E5%90%AC%E5%8A%9B-%E7%AC%AC2%E5%A5%97.mp3
 -- ============================================================
 
+SET NAMES utf8mb4;
 USE cet4_platform;
 
 -- ============================================================
