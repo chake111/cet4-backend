@@ -65,9 +65,9 @@ java -Xms256m -Xmx512m \
 | 变量 | 必填 | 说明 |
 |------|------|------|
 | `DB_PASSWORD` | ✅ | MySQL 密码 |
+| `JWT_SECRET` | ✅ | JWT 签名密钥，生产环境必须设置强随机值 |
 | `DB_USERNAME` | ❌ | MySQL 用户名，默认 `root` |
-| `JWT_SECRET` | ❌ | JWT 签名密钥，生产环境务必替换 |
-| `DEEPSEEK_API_KEY` | ❌ | DeepSeek AI 接口密钥 |
+| `DEEPSEEK_API_KEY` | ❌ | DeepSeek AI 接口密钥，未设置时 AI 功能降级 |
 | `REDIS_HOST` | ❌ | Redis 地址，默认 `127.0.0.1` |
 | `REDIS_PORT` | ❌ | Redis 端口，默认 `6379` |
 | `REDIS_PASSWORD` | ❌ | Redis 密码 |

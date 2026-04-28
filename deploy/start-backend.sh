@@ -22,6 +22,11 @@ if [ -z "${DB_PASSWORD:-}" ]; then
   exit 1
 fi
 
+if [ -z "${JWT_SECRET:-}" ]; then
+  echo "ERROR: JWT_SECRET environment variable is required."
+  exit 1
+fi
+
 # ---------- build java opts ----------
 JAVA_OPTS="${JAVA_OPTS:--Xms256m -Xmx512m}"
 
@@ -29,5 +34,7 @@ JAVA_OPTS="${JAVA_OPTS:--Xms256m -Xmx512m}"
 echo "Starting cet4-backend [profile=${PROFILE}] ..."
 exec java ${JAVA_OPTS} \
   -Dspring.profiles.active="${PROFILE}" \
+  -DJWT_SECRET="${JWT_SECRET}" \
   -DDB_PASSWORD="${DB_PASSWORD}" \
+  -DDEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-sk-placeholder}" \
   -jar "${JAR_DIR}/${JAR_NAME}"

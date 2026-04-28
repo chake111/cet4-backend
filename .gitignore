@@ -2,6 +2,11 @@ HELP.md
 application-prod.yml
 target/
 .mvn/wrapper/maven-wrapper.jar
+
+### Production secrets ###
+deploy/.env.prod
+deploy/PROD_DEPLOY_RECORD.md
+backups/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
