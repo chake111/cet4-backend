@@ -1,9 +1,6 @@
 package com.cet4.platform.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.cet4.platform.common.BusinessException;
 import com.cet4.platform.dto.AnswerItemDTO;
 import com.cet4.platform.dto.ExamDraftSaveRequest;
@@ -20,32 +17,34 @@ import com.cet4.platform.mapper.ExamRecordMapper;
 import com.cet4.platform.mapper.QuestionMapper;
 import com.cet4.platform.mapper.UserAnswerMapper;
 import com.cet4.platform.mapper.UserMapper;
-import com.cet4.platform.vo.AnswerDetailVO;
-import com.cet4.platform.vo.ExamRecordVO;
-import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.service.AiScoringResult;
 import com.cet4.platform.service.AiScoringService;
 import com.cet4.platform.service.ExamService;
+import com.cet4.platform.vo.AnswerDetailVO;
+import com.cet4.platform.vo.ExamRecordVO;
+import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
@@ -58,6 +57,8 @@ public class ExamServiceImpl implements ExamService {
     private static final String DRAFT_KEY_FORMAT = "exam:draft:%d:%s";
     private static final String SESSION_KEY_FORMAT = "exam:session:%d";
     private static final Duration SESSION_TTL = Duration.ofMinutes(130);
+    private static final String SUBMIT_LOCK_KEY_FORMAT = "exam:submit:lock:%d:%d";
+    private static final Duration SUBMIT_LOCK_TTL = Duration.ofSeconds(30);
 
     private final ExamMapper examMapper;
     private final QuestionMapper questionMapper;
@@ -192,6 +193,16 @@ public class ExamServiceImpl implements ExamService {
         User user = getUserByUsername(username);
         Long examId = resolveExamIdByPaperId(request.getPaperId());
 
+        // Redis 幂等锁：防止同一用户同一试卷重复提交
+        String lockKey = buildSubmitLockKey(user.getId(), examId);
+        Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", SUBMIT_LOCK_TTL);
+        if (acquired == null || !acquired) {
+            log.warn("重复提交被拦截: userId={}, examId={}", user.getId(), examId);
+            throw new BusinessException("请勿重复提交，请稍后再试");
+        }
+
+        boolean success = false;
+        try {
         List<Question> questions = questionMapper.selectList(new LambdaQueryWrapper<Question>()
                 .eq(Question::getExamId, examId));
         if (questions.isEmpty()) {
@@ -330,7 +341,13 @@ public class ExamServiceImpl implements ExamService {
         result.put("recordId", examRecord.getId());
         result.put("score", score);
         result.put("total", total);
+        success = true;
         return result;
+        } finally {
+            if (!success) {
+                stringRedisTemplate.delete(lockKey);
+            }
+        }
     }
 
     @Override
@@ -339,6 +356,16 @@ public class ExamServiceImpl implements ExamService {
         User user = getUserByUsername(username);
         ExamRecord examRecord = getAndValidateExamRecord(recordId, user.getId());
 
+        // Redis 幂等锁：防止同一用户同一试卷重复提交
+        String lockKey = buildSubmitLockKey(user.getId(), examRecord.getExamId());
+        Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", SUBMIT_LOCK_TTL);
+        if (acquired == null || !acquired) {
+            log.warn("重复提交被拦截: userId={}, examId={}", user.getId(), examRecord.getExamId());
+            throw new BusinessException("请勿重复提交，请稍后再试");
+        }
+
+        boolean success = false;
+        try {
         if (!IN_PROGRESS.equals(examRecord.getStatus())) {
             throw new BusinessException("考试记录状态不是 in_progress，无法提交");
         }
@@ -395,7 +422,13 @@ public class ExamServiceImpl implements ExamService {
         Map<String, Object> result = new HashMap<>();
         result.put("totalScore", totalObjectiveScore);
         result.put("examRecordId", recordId);
+        success = true;
         return result;
+        } finally {
+            if (!success) {
+                stringRedisTemplate.delete(lockKey);
+            }
+        }
     }
 
     @Override
@@ -569,6 +602,10 @@ public class ExamServiceImpl implements ExamService {
 
     private String buildSessionKey(Long userId) {
         return String.format(SESSION_KEY_FORMAT, userId);
+    }
+
+    private String buildSubmitLockKey(Long userId, Long examId) {
+        return String.format(SUBMIT_LOCK_KEY_FORMAT, userId, examId);
     }
 
     private String toJson(Object obj) {
