@@ -4,11 +4,20 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 30000
+      validation-timeout: 5000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-test-query: SELECT 1
   data:
     redis:
       host: 127.0.0.1
       port: 6379
       database: 0
+      connect-timeout: 5000
 
 mybatis-plus:
   configuration:
