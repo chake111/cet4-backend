@@ -1,5 +1,6 @@
 package com.cet4.platform.filter;
 
+import com.cet4.platform.domain.UserRoles;
 import com.cet4.platform.utils.JwtUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -34,7 +35,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     && SecurityContextHolder.getContext().getAuthentication() == null) {
                 String username = jwtUtils.getUsernameFromToken(token);
                 String role = jwtUtils.getRoleFromToken(token);
-                String roleAuthority = "ROLE_" + (role == null ? "STUDENT" : role.toUpperCase(Locale.ROOT));
+                String roleAuthority = "ROLE_" + (role == null ? UserRoles.STUDENT.toUpperCase(Locale.ROOT) : role.toUpperCase(Locale.ROOT));
 
                 UsernamePasswordAuthenticationToken authenticationToken =
                         new UsernamePasswordAuthenticationToken(username, null,

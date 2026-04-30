@@ -2,6 +2,8 @@ package com.cet4.platform.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cet4.platform.common.BusinessException;
+import com.cet4.platform.domain.ExamStatus;
+import com.cet4.platform.domain.QuestionTypes;
 import com.cet4.platform.dto.AnswerItemDTO;
 import com.cet4.platform.dto.ExamDraftSaveRequest;
 import com.cet4.platform.dto.ExamStartRequest;
@@ -17,18 +19,18 @@ import com.cet4.platform.mapper.ExamRecordMapper;
 import com.cet4.platform.mapper.QuestionMapper;
 import com.cet4.platform.mapper.UserAnswerMapper;
 import com.cet4.platform.mapper.UserMapper;
-import com.cet4.platform.service.AiScoringResult;
-import com.cet4.platform.service.AiScoringService;
 import com.cet4.platform.service.ExamService;
+import com.cet4.platform.support.ExamCacheStore;
+import com.cet4.platform.support.ExamScoringSupport;
+import com.cet4.platform.support.ExamScoringSupport.ScoringResult;
+import com.cet4.platform.support.ExamSubmissionWriter;
+import com.cet4.platform.support.JsonSupport;
 import com.cet4.platform.vo.AnswerDetailVO;
 import com.cet4.platform.vo.ExamRecordVO;
 import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,12 +38,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,23 +51,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ExamServiceImpl implements ExamService {
 
-    private static final String IN_PROGRESS = "in_progress";
-    private static final String SUBMITTED = "submitted";
-    private static final Set<String> OBJECTIVE_TYPES = Set.of("single_choice", "blank_filling", "matching");
-    private static final String DRAFT_KEY_FORMAT = "exam:draft:%d:%s";
-    private static final String SESSION_KEY_FORMAT = "exam:session:%d";
-    private static final Duration SESSION_TTL = Duration.ofMinutes(130);
-    private static final String SUBMIT_LOCK_KEY_FORMAT = "exam:submit:lock:%d:%d";
-    private static final Duration SUBMIT_LOCK_TTL = Duration.ofSeconds(30);
-
     private final ExamMapper examMapper;
     private final QuestionMapper questionMapper;
     private final ExamRecordMapper examRecordMapper;
     private final UserMapper userMapper;
     private final UserAnswerMapper userAnswerMapper;
-    private final StringRedisTemplate stringRedisTemplate;
-    private final ObjectMapper objectMapper;
-    private final AiScoringService aiScoringService;
+    private final ExamCacheStore examCacheStore;
+    private final ExamScoringSupport examScoringSupport;
+    private final ExamSubmissionWriter examSubmissionWriter;
+    private final JsonSupport jsonSupport;
 
     @Override
     public List<ExamVO> listPublishedExams() {
@@ -104,7 +96,7 @@ public class ExamServiceImpl implements ExamService {
         ExamRecord existing = examRecordMapper.selectOne(new LambdaQueryWrapper<ExamRecord>()
                 .eq(ExamRecord::getUserId, user.getId())
                 .eq(ExamRecord::getExamId, examId)
-                .eq(ExamRecord::getStatus, IN_PROGRESS)
+                .eq(ExamRecord::getStatus, ExamStatus.IN_PROGRESS)
                 .orderByDesc(ExamRecord::getId)
                 .last("limit 1"));
 
@@ -115,7 +107,7 @@ public class ExamServiceImpl implements ExamService {
             ExamRecord examRecord = new ExamRecord();
             examRecord.setUserId(user.getId());
             examRecord.setExamId(examId);
-            examRecord.setStatus(IN_PROGRESS);
+            examRecord.setStatus(ExamStatus.IN_PROGRESS);
             examRecord.setStartTime(LocalDateTime.now());
             examRecordMapper.insert(examRecord);
             examRecordId = examRecord.getId();
@@ -148,13 +140,7 @@ public class ExamServiceImpl implements ExamService {
                 Collectors.toList()));
 
         LocalDateTime startedAt = LocalDateTime.now();
-        String draftKey = buildDraftKey(user.getId(), request.getPaperId());
-        String sessionKey = buildSessionKey(user.getId());
-
-        stringRedisTemplate.opsForValue().set(draftKey, "{}");
-        stringRedisTemplate.opsForValue().set(sessionKey,
-                toJson(Map.of("paperId", request.getPaperId(), "startedAt", startedAt.toString())),
-                SESSION_TTL);
+        examCacheStore.startSession(user.getId(), request.getPaperId(), startedAt);
 
         Map<String, Object> result = new HashMap<>();
         result.put("paperId", request.getPaperId());
@@ -165,7 +151,7 @@ public class ExamServiceImpl implements ExamService {
 
     private String mapStageKey(String part) {
         if (part != null && part.startsWith("reading")) {
-            return "reading";
+            return QuestionTypes.READING_STAGE;
         }
         return part;
     }
@@ -173,30 +159,20 @@ public class ExamServiceImpl implements ExamService {
     @Override
     public Map<String, Boolean> saveExamDraft(ExamDraftSaveRequest request, String username) {
         User user = getUserByUsername(username);
-        String key = buildDraftKey(user.getId(), request.getPaperId());
-        String raw = stringRedisTemplate.opsForValue().get(key);
-        Map<String, String> draft = raw == null || raw.isBlank()
-                ? new HashMap<>()
-                : fromJson(raw, new TypeReference<>() {
-                });
-
+        Map<String, String> draft = examCacheStore.readDraft(user.getId(), request.getPaperId());
         String mapKey = request.getStage() + ":" + request.getQuestionId();
         draft.put(mapKey, request.getAnswer());
-        stringRedisTemplate.opsForValue().set(key, toJson(draft));
+        examCacheStore.saveDraft(user.getId(), request.getPaperId(), draft);
 
         return Map.of("success", true);
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> submitExamSession(ExamSubmitRequest request, String username) {
         User user = getUserByUsername(username);
         Long examId = resolveExamIdByPaperId(request.getPaperId());
 
-        // Redis 幂等锁：防止同一用户同一试卷重复提交
-        String lockKey = buildSubmitLockKey(user.getId(), examId);
-        Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", SUBMIT_LOCK_TTL);
-        if (acquired == null || !acquired) {
+        if (!examCacheStore.acquireSubmitLock(user.getId(), examId)) {
             log.warn("重复提交被拦截: userId={}, examId={}", user.getId(), examId);
             throw new BusinessException("请勿重复提交，请稍后再试");
         }
@@ -210,142 +186,38 @@ public class ExamServiceImpl implements ExamService {
         }
 
         Map<String, String> answers = request.getAnswers() == null ? Map.of() : request.getAnswers();
-        Map<Long, Question> questionMap = questions.stream()
-                .collect(Collectors.toMap(Question::getId, q -> q));
-
-        // Cache per-question scores, correctness and AI feedback to avoid duplicate AI calls
-        Map<Long, Integer> questionScoreMap = new HashMap<>();
-        Map<Long, Boolean> questionCorrectMap = new HashMap<>();
-        Map<Long, String> questionFeedbackMap = new HashMap<>();
-
-        int score = 0;
-        int total = 0;
-        for (Question question : questions) {
-            int maxScore = question.getScore() == null ? 0 : question.getScore();
-            total += maxScore;
-            String qt = question.getQuestionType();
-            if ("writing".equalsIgnoreCase(qt) || "translation".equalsIgnoreCase(qt)) {
-                continue;
-            }
-            String normalizedCorrectAnswer = normalizeAnswer(question.getCorrectAnswer());
-            if (normalizedCorrectAnswer == null || normalizedCorrectAnswer.isBlank()) {
-                continue;
-            }
-            String normalizedUserAnswer = normalizeAnswer(answers.get(String.valueOf(question.getId())));
-            boolean correct = normalizedUserAnswer != null
-                    && !normalizedUserAnswer.isBlank()
-                    && Objects.equals(normalizedUserAnswer, normalizedCorrectAnswer);
-            int qScore = correct ? maxScore : 0;
-            score += qScore;
-            questionScoreMap.put(question.getId(), qScore);
-            questionCorrectMap.put(question.getId(), correct);
-        }
-
-        for (Map.Entry<String, String> entry : answers.entrySet()) {
-            Long questionId;
-            try {
-                questionId = Long.parseLong(entry.getKey());
-            } catch (NumberFormatException ex) {
-                continue;
-            }
-
-            Question question = questionMap.get(questionId);
-            if (question == null) {
-                continue;
-            }
-
-            String questionType = question.getQuestionType();
-            if (!"writing".equalsIgnoreCase(questionType) && !"translation".equalsIgnoreCase(questionType)) {
-                continue;
-            }
-
-            AiScoringResult aiResult = aiScoringService.scoreSubjectiveAnswer(
-                    questionType,
-                    question.getContent(),
-                    entry.getValue(),
-                    question.getScore() == null ? 0 : question.getScore());
-            int aiScore = aiResult.getScore();
-            score += aiScore;
-            questionScoreMap.put(questionId, aiScore);
-            questionCorrectMap.put(questionId, null);
-            if (aiResult.getFeedback() != null) {
-                questionFeedbackMap.put(questionId, aiResult.getFeedback());
-            }
-        }
+        ScoringResult scoringResult = examScoringSupport.score(answers, questions);
 
         LocalDateTime now = LocalDateTime.now();
 
-        // 从 Redis session 读取考试开始时间
         LocalDateTime startTime = now;
-        String sessionJson = stringRedisTemplate.opsForValue().get(buildSessionKey(user.getId()));
-        if (sessionJson != null && !sessionJson.isBlank()) {
-            try {
-                Map<String, String> session = fromJson(sessionJson, new TypeReference<>() {});
-                String startedAtStr = session.get("startedAt");
-                if (startedAtStr != null && !startedAtStr.isBlank()) {
-                    startTime = LocalDateTime.parse(startedAtStr);
-                }
-            } catch (Exception e) {
-                log.warn("解析 Redis session startedAt 失败，使用当前时间作为 startTime", e);
-            }
+        try {
+            startTime = examCacheStore.readStartedAt(user.getId(), now);
+        } catch (Exception e) {
+            log.warn("解析 Redis session startedAt 失败，使用当前时间作为 startTime", e);
         }
 
-        ExamRecord examRecord = new ExamRecord();
-        examRecord.setUserId(user.getId());
-        examRecord.setExamId(examId);
-        examRecord.setPaperId(request.getPaperId());
-        examRecord.setStartTime(startTime);
-        examRecord.setSubmitTime(now);
-        examRecord.setTotalScore(score);
-        examRecord.setAnswers(toJson(answers));
-        examRecord.setStatus(SUBMITTED);
-        examRecordMapper.insert(examRecord);
+        ExamRecord examRecord = examSubmissionWriter.saveSubmittedSession(
+                user,
+                examId,
+                request.getPaperId(),
+                startTime,
+                now,
+                answers,
+                questions,
+                scoringResult);
 
-        // Write user_answer records for all questions
-        Long recordId = examRecord.getId();
-        for (Question question : questions) {
-            UserAnswer ua = new UserAnswer();
-            ua.setExamRecordId(recordId);
-            ua.setUserId(user.getId());
-            ua.setQuestionId(question.getId());
-            ua.setUserAnswer(answers.get(String.valueOf(question.getId())));
-            ua.setCreatedAt(now);
-
-            Integer qScore = questionScoreMap.get(question.getId());
-            Boolean qCorrect = questionCorrectMap.get(question.getId());
-
-            ua.setScore(qScore != null ? qScore : 0);
-
-            String qt = question.getQuestionType();
-            boolean subjective = "writing".equalsIgnoreCase(qt) || "translation".equalsIgnoreCase(qt);
-            if (subjective) {
-                ua.setIsCorrect(null);
-                if (qScore != null) {
-                    ua.setAiScore(qScore);
-                }
-                String qFeedback = questionFeedbackMap.get(question.getId());
-                if (qFeedback != null) {
-                    ua.setAiFeedback(qFeedback);
-                }
-            } else {
-                ua.setIsCorrect(Boolean.TRUE.equals(qCorrect) ? 1 : 0);
-            }
-
-            userAnswerMapper.insert(ua);
-        }
-
-        stringRedisTemplate.delete(buildDraftKey(user.getId(), request.getPaperId()));
-        stringRedisTemplate.delete(buildSessionKey(user.getId()));
+        examCacheStore.clearSession(user.getId(), request.getPaperId());
 
         Map<String, Object> result = new HashMap<>();
         result.put("recordId", examRecord.getId());
-        result.put("score", score);
-        result.put("total", total);
+        result.put("score", scoringResult.getScore());
+        result.put("total", scoringResult.getTotal());
         success = true;
         return result;
         } finally {
             if (!success) {
-                stringRedisTemplate.delete(lockKey);
+                examCacheStore.releaseSubmitLock(user.getId(), examId);
             }
         }
     }
@@ -356,17 +228,14 @@ public class ExamServiceImpl implements ExamService {
         User user = getUserByUsername(username);
         ExamRecord examRecord = getAndValidateExamRecord(recordId, user.getId());
 
-        // Redis 幂等锁：防止同一用户同一试卷重复提交
-        String lockKey = buildSubmitLockKey(user.getId(), examRecord.getExamId());
-        Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", SUBMIT_LOCK_TTL);
-        if (acquired == null || !acquired) {
+        if (!examCacheStore.acquireSubmitLock(user.getId(), examRecord.getExamId())) {
             log.warn("重复提交被拦截: userId={}, examId={}", user.getId(), examRecord.getExamId());
             throw new BusinessException("请勿重复提交，请稍后再试");
         }
 
         boolean success = false;
         try {
-        if (!IN_PROGRESS.equals(examRecord.getStatus())) {
+        if (!ExamStatus.IN_PROGRESS.equals(examRecord.getStatus())) {
             throw new BusinessException("考试记录状态不是 in_progress，无法提交");
         }
 
@@ -403,8 +272,9 @@ public class ExamServiceImpl implements ExamService {
             userAnswer.setQuestionId(questionId);
             userAnswer.setUserAnswer(answerItem.getAnswer());
 
-            if (OBJECTIVE_TYPES.contains(question.getQuestionType())) {
-                boolean isCorrect = Objects.equals(normalizeAnswer(answerItem.getAnswer()), normalizeAnswer(question.getCorrectAnswer()));
+            if (QuestionTypes.isObjective(question.getQuestionType())) {
+                boolean isCorrect = Objects.equals(ExamScoringSupport.normalizeAnswer(answerItem.getAnswer()),
+                        ExamScoringSupport.normalizeAnswer(question.getCorrectAnswer()));
                 int score = isCorrect ? question.getScore() : 0;
                 userAnswer.setIsCorrect(isCorrect ? 1 : 0);
                 userAnswer.setScore(score);
@@ -415,7 +285,7 @@ public class ExamServiceImpl implements ExamService {
         }
 
         examRecord.setTotalScore(totalObjectiveScore);
-        examRecord.setStatus(SUBMITTED);
+        examRecord.setStatus(ExamStatus.SUBMITTED);
         examRecord.setSubmitTime(LocalDateTime.now());
         examRecordMapper.updateById(examRecord);
 
@@ -426,7 +296,7 @@ public class ExamServiceImpl implements ExamService {
         return result;
         } finally {
             if (!success) {
-                stringRedisTemplate.delete(lockKey);
+                examCacheStore.releaseSubmitLock(user.getId(), examRecord.getExamId());
             }
         }
     }
@@ -450,7 +320,7 @@ public class ExamServiceImpl implements ExamService {
         // Keep backward compatibility: flat answers map
         Map<String, Object> answerMap = examRecord.getAnswers() == null || examRecord.getAnswers().isBlank()
                 ? Map.of()
-                : fromJson(examRecord.getAnswers(), new TypeReference<>() {
+                : jsonSupport.fromJson(examRecord.getAnswers(), new TypeReference<>() {
                 });
         resultVO.setAnswers(answerMap);
 
@@ -483,8 +353,7 @@ public class ExamServiceImpl implements ExamService {
             detail.setCorrectAnswer(question.getCorrectAnswer());
 
             UserAnswer ua = userAnswerMap.get(question.getId());
-            String qt = question.getQuestionType();
-            boolean subjective = "writing".equalsIgnoreCase(qt) || "translation".equalsIgnoreCase(qt);
+            boolean subjective = QuestionTypes.isSubjective(question.getQuestionType());
 
             if (ua != null) {
                 detail.setUserAnswer(ua.getUserAnswer());
@@ -561,10 +430,6 @@ public class ExamServiceImpl implements ExamService {
         return examRecord;
     }
 
-    private String normalizeAnswer(String answer) {
-        return answer == null ? null : answer.trim().toUpperCase();
-    }
-
     private Long resolveExamIdByPaperId(String paperId) {
         try {
             return Long.parseLong(paperId);
@@ -596,26 +461,6 @@ public class ExamServiceImpl implements ExamService {
         }
     }
 
-    private String buildDraftKey(Long userId, String paperId) {
-        return String.format(DRAFT_KEY_FORMAT, userId, paperId);
-    }
-
-    private String buildSessionKey(Long userId) {
-        return String.format(SESSION_KEY_FORMAT, userId);
-    }
-
-    private String buildSubmitLockKey(Long userId, Long examId) {
-        return String.format(SUBMIT_LOCK_KEY_FORMAT, userId, examId);
-    }
-
-    private String toJson(Object obj) {
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (JsonProcessingException ex) {
-            throw new BusinessException("JSON 序列化失败");
-        }
-    }
-
     @Override
     public List<ExamRecordVO> listUserRecords(String username) {
         User user = getUserByUsername(username);
@@ -623,7 +468,7 @@ public class ExamServiceImpl implements ExamService {
         List<ExamRecord> records = examRecordMapper.selectList(
             new LambdaQueryWrapper<ExamRecord>()
                 .eq(ExamRecord::getUserId, user.getId())
-                .eq(ExamRecord::getStatus, SUBMITTED)
+                .eq(ExamRecord::getStatus, ExamStatus.SUBMITTED)
                 .orderByDesc(ExamRecord::getCreatedAt)
         );
 
@@ -648,11 +493,4 @@ public class ExamServiceImpl implements ExamService {
         }).collect(Collectors.toList());
     }
 
-    private <T> T fromJson(String json, TypeReference<T> typeReference) {
-        try {
-            return objectMapper.readValue(json, typeReference);
-        } catch (JsonProcessingException ex) {
-            throw new BusinessException("JSON 解析失败");
-        }
-    }
 }

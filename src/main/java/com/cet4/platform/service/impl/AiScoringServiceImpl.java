@@ -2,6 +2,9 @@ package com.cet4.platform.service.impl;
 
 import com.cet4.platform.service.AiScoringResult;
 import com.cet4.platform.service.AiScoringService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -27,6 +30,7 @@ public class AiScoringServiceImpl implements AiScoringService {
     private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("```(?:json)?\\s*\\n?(\\{[\\s\\S]*?\\})\\s*\\n?```", Pattern.MULTILINE);
     private static final Pattern JSON_OBJECT_PATTERN = Pattern.compile("\\{[\\s\\S]*\\}");
 
+    private final ObjectMapper objectMapper;
     private RestTemplate restTemplate;
 
     @Value("${ai.deepseek.api-key}")
@@ -41,6 +45,18 @@ public class AiScoringServiceImpl implements AiScoringService {
     @Value("${ai.deepseek.timeout:30}")
     private int timeout;
 
+    public AiScoringServiceImpl(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    @PostConstruct
+    public void initRestTemplate() {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        int timeoutMs = Math.max(timeout, 1) * 1000;
+        requestFactory.setConnectTimeout(timeoutMs);
+        requestFactory.setReadTimeout(timeoutMs);
+        restTemplate = new RestTemplate(requestFactory);
+    }
 
     @Override
     public AiScoringResult scoreSubjectiveAnswer(String questionType, String content, String answer, int maxScore) {
@@ -49,14 +65,6 @@ public class AiScoringServiceImpl implements AiScoringService {
         }
 
         try {
-            if (restTemplate == null) {
-                SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-                int timeoutMs = Math.max(timeout, 1) * 1000;
-                requestFactory.setConnectTimeout(timeoutMs);
-                requestFactory.setReadTimeout(timeoutMs);
-                restTemplate = new RestTemplate(requestFactory);
-            }
-
             String prompt = buildPrompt(questionType, content, answer, maxScore);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -193,29 +201,10 @@ public class AiScoringServiceImpl implements AiScoringService {
         // 3. 如果提取到了 JSON，尝试解析 score 和 feedback
         if (jsonStr != null) {
             try {
-                // 使用简单的正则提取 score
-                Matcher scoreMatcher = Pattern.compile("\"score\"\\s*:\\s*(\\d+)").matcher(jsonStr);
-                int score = 0;
-                if (scoreMatcher.find()) {
-                    score = Integer.parseInt(scoreMatcher.group(1));
-                    score = Math.max(0, Math.min(score, maxScore));
-                }
-
-                // 提取 feedback 对象作为字符串
-                String feedbackJson = null;
-                Matcher feedbackMatcher = Pattern.compile("\"feedback\"\\s*:\\s*(\\{[\\s\\S]*?\\})\\s*\\}?$").matcher(jsonStr);
-                if (feedbackMatcher.find()) {
-                    feedbackJson = feedbackMatcher.group(1).trim();
-                }
-
-                // 如果 feedback 提取失败，尝试把整个 feedback 部分提取出来
-                if (feedbackJson == null) {
-                    Matcher feedbackObjMatcher = Pattern.compile("\"feedback\"\\s*:\\s*(\\{[^{}]*(?:\\{[^{}]*\\}[^{}]*)*\\})").matcher(jsonStr);
-                    if (feedbackObjMatcher.find()) {
-                        feedbackJson = feedbackObjMatcher.group(1).trim();
-                    }
-                }
-
+                JsonNode root = objectMapper.readTree(jsonStr);
+                int score = Math.max(0, Math.min(root.path("score").asInt(0), maxScore));
+                JsonNode feedback = root.path("feedback");
+                String feedbackJson = feedback.isMissingNode() || feedback.isNull() ? null : objectMapper.writeValueAsString(feedback);
                 return AiScoringResult.of(score, feedbackJson);
             } catch (Exception ex) {
                 log.warn("解析 AI 返回的 JSON 失败，尝试降级为纯数字解析。content={}", content, ex);

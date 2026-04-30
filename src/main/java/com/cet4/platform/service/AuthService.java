@@ -2,6 +2,7 @@ package com.cet4.platform.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cet4.platform.common.BusinessException;
+import com.cet4.platform.domain.UserRoles;
 import com.cet4.platform.dto.AuthLoginRequest;
 import com.cet4.platform.dto.AuthLoginResponse;
 import com.cet4.platform.dto.AuthRegisterRequest;
@@ -18,8 +19,6 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final String DEFAULT_STUDENT_ROLE = "student";
-
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
@@ -34,7 +33,7 @@ public class AuthService {
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole(DEFAULT_STUDENT_ROLE);
+        user.setRole(UserRoles.STUDENT);
         user.setDeleted(0);
         user.setCreatedAt(LocalDateTime.now());
         userMapper.insert(user);
@@ -46,7 +45,7 @@ public class AuthService {
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new BusinessException("用户名或密码错误");
         }
-        String role = user.getRole() == null ? DEFAULT_STUDENT_ROLE : user.getRole();
+        String role = user.getRole() == null ? UserRoles.STUDENT : user.getRole();
         return new AuthLoginResponse(jwtUtils.generateToken(user.getUsername(), role));
     }
 }

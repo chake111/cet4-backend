@@ -36,7 +36,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Result<Void> handleException(Exception ex, HttpServletRequest request) {
         log.error("未处理异常: {} {}", request.getMethod(), request.getRequestURI(), ex);
-        String message = ex.getMessage() != null ? ex.getMessage() : "服务器内部错误";
-        return Result.fail(500, message, request.getRequestURI());
+        return Result.fail(500, "服务器内部错误", request.getRequestURI());
     }
 }
