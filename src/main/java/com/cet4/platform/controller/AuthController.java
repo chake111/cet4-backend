@@ -5,6 +5,7 @@ import com.cet4.platform.dto.AuthLoginRequest;
 import com.cet4.platform.dto.AuthLoginResponse;
 import com.cet4.platform.dto.AuthRegisterRequest;
 import com.cet4.platform.service.AuthService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,13 +20,13 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public Result<Void> register(@RequestBody AuthRegisterRequest request) {
+    public Result<Void> register(@Valid @RequestBody AuthRegisterRequest request) {
         authService.register(request);
         return Result.success("注册成功", null);
     }
 
     @PostMapping("/login")
-    public Result<AuthLoginResponse> login(@RequestBody AuthLoginRequest request) {
+    public Result<AuthLoginResponse> login(@Valid @RequestBody AuthLoginRequest request) {
         return Result.success(authService.login(request));
     }
 }

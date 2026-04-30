@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -12,6 +13,7 @@ import java.sql.Connection;
 
 @Slf4j
 @Component
+@ConditionalOnBean({DataSource.class, StringRedisTemplate.class})
 @RequiredArgsConstructor
 public class StartupWarmupRunner implements ApplicationRunner {
 
@@ -36,7 +38,9 @@ public class StartupWarmupRunner implements ApplicationRunner {
 
     private void warmupRedis() {
         try {
-            stringRedisTemplate.getConnectionFactory().getConnection().ping();
+            if (stringRedisTemplate.getConnectionFactory() != null) {
+                stringRedisTemplate.getConnectionFactory().getConnection().ping();
+            }
             log.info("Redis连接预热成功");
         } catch (Exception e) {
             log.error("Redis连接预热失败", e);

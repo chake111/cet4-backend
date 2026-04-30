@@ -69,11 +69,12 @@ public class AdminQuestionServiceImpl implements AdminQuestionService {
         if (StringUtils.hasText(type)) {
             wrapper.eq(Question::getQuestionType, type);
         }
-        if (year != null) {
-            wrapper.inSql(Question::getExamId, "select id from exam where year = " + year);
-        }
-        if (month != null) {
-            wrapper.inSql(Question::getExamId, "select id from exam where month = " + month);
+        if (year != null || month != null) {
+            List<Long> examIds = listExamIds(year, month);
+            if (examIds.isEmpty()) {
+                return emptyPage(current, size);
+            }
+            wrapper.in(Question::getExamId, examIds);
         }
         IPage<Question> resultPage = questionMapper.selectPage(page, wrapper);
 
@@ -85,6 +86,26 @@ public class AdminQuestionServiceImpl implements AdminQuestionService {
         result.put("size", resultPage.getSize());
         result.put("total", resultPage.getTotal());
         result.put("records", records);
+        return result;
+    }
+
+    private List<Long> listExamIds(Integer year, Integer month) {
+        LambdaQueryWrapper<Exam> wrapper = new LambdaQueryWrapper<>();
+        if (year != null) {
+            wrapper.eq(Exam::getYear, year);
+        }
+        if (month != null) {
+            wrapper.eq(Exam::getMonth, month);
+        }
+        return examMapper.selectList(wrapper).stream().map(Exam::getId).toList();
+    }
+
+    private Map<String, Object> emptyPage(Integer current, Integer size) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("current", current);
+        result.put("size", size);
+        result.put("total", 0L);
+        result.put("records", List.of());
         return result;
     }
 
