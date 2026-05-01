@@ -18,8 +18,6 @@ public interface ExamService {
 
     List<QuestionVO> listExamQuestions(Long examId);
 
-    Map<String, Long> startExam(Long examId, String username);
-
     Map<String, Object> startExamSession(ExamStartRequest request, String username);
 
     Map<String, Boolean> saveExamDraft(ExamDraftSaveRequest request, String username);

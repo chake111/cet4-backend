@@ -11,6 +11,8 @@ import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,9 +22,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/exam")
@@ -39,16 +38,6 @@ public class ExamController {
     @GetMapping("/{id}/questions")
     public Result<List<QuestionVO>> listExamQuestions(@PathVariable("id") Long examId) {
         return Result.success(examService.listExamQuestions(examId));
-    }
-
-    /**
-     * @deprecated 旧接口 POST /exam/{id}/start 已不再被前端调用，后续可删除。
-     * 前端统一使用 POST /exam/start（startExamSession）作为唯一考试启动入口。
-     */
-    @Deprecated
-    @PostMapping("/{id}/start")
-    public Result<Map<String, Long>> startExam(@PathVariable("id") Long examId, Authentication authentication) {
-        return Result.success(examService.startExam(examId, authentication.getName()));
     }
 
     @PostMapping("/start")

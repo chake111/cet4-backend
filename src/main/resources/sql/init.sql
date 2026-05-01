@@ -52,7 +52,9 @@ CREATE TABLE `question` (
     `sort_order`      INT NOT NULL,
     `deleted`         TINYINT DEFAULT 0,
     `created_at`      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    KEY `idx_question_exam_id` (`exam_id`)
+    KEY `idx_question_exam_id` (`exam_id`),
+    KEY `idx_question_exam_sort` (`exam_id`, `sort_order`),
+    KEY `idx_question_type_exam` (`question_type`, `exam_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 考试记录表：存储用户参加试卷的作答过程与结果
@@ -69,7 +71,8 @@ CREATE TABLE `exam_record` (
     `created_at`   DATETIME DEFAULT CURRENT_TIMESTAMP,
     KEY `idx_exam_record_user_id` (`user_id`),
     KEY `idx_exam_record_exam_id` (`exam_id`),
-    KEY `idx_exam_record_user_exam` (`user_id`, `exam_id`)
+    KEY `idx_exam_record_user_exam` (`user_id`, `exam_id`),
+    KEY `idx_exam_record_user_status_created` (`user_id`, `status`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 用户答题记录表：存储用户对每道题的作答与批改信息

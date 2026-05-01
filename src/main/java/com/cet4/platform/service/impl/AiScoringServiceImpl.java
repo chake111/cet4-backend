@@ -2,8 +2,7 @@ package com.cet4.platform.service.impl;
 
 import com.cet4.platform.service.AiScoringResult;
 import com.cet4.platform.service.AiScoringService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.cet4.platform.support.AiScoringResponseParser;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,20 +16,14 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 public class AiScoringServiceImpl implements AiScoringService {
 
-    private static final String WRITING = "writing";
     private static final String TRANSLATION = "translation";
-    private static final Pattern SCORE_PATTERN = Pattern.compile("\\d+");
-    private static final Pattern JSON_BLOCK_PATTERN = Pattern.compile("```(?:json)?\\s*\\n?(\\{[\\s\\S]*?\\})\\s*\\n?```", Pattern.MULTILINE);
-    private static final Pattern JSON_OBJECT_PATTERN = Pattern.compile("\\{[\\s\\S]*\\}");
 
-    private final ObjectMapper objectMapper;
+    private final AiScoringResponseParser responseParser;
     private RestTemplate restTemplate;
 
     @Value("${ai.deepseek.api-key}")
@@ -45,8 +38,8 @@ public class AiScoringServiceImpl implements AiScoringService {
     @Value("${ai.deepseek.timeout:30}")
     private int timeout;
 
-    public AiScoringServiceImpl(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    public AiScoringServiceImpl(AiScoringResponseParser responseParser) {
+        this.responseParser = responseParser;
     }
 
     @PostConstruct
@@ -84,7 +77,7 @@ public class AiScoringServiceImpl implements AiScoringService {
             }
 
             String responseContent = extractContent(response.getBody());
-            AiScoringResult result = parseScoringResult(responseContent, maxScore);
+            AiScoringResult result = responseParser.parse(responseContent, maxScore);
             log.info("AI评分完成: questionType={}, maxScore={}, score={}, hasFeedback={}",
                     questionType, maxScore, result.getScore(), result.getFeedback() != null);
             return result;
@@ -170,55 +163,4 @@ public class AiScoringServiceImpl implements AiScoringService {
         return contentObj == null ? "" : String.valueOf(contentObj);
     }
 
-    /**
-     * 解析 AI 返回的评分结果。
-     * 支持以下格式：
-     * 1. 纯 JSON 对象
-     * 2. ```json ... ``` 代码块包裹的 JSON
-     * 3. 纯数字（向后兼容）
-     */
-    private AiScoringResult parseScoringResult(String content, int maxScore) {
-        if (content == null || content.isBlank()) {
-            return AiScoringResult.fail();
-        }
-
-        String jsonStr = null;
-
-        // 1. 尝试提取 ```json ... ``` 代码块
-        Matcher blockMatcher = JSON_BLOCK_PATTERN.matcher(content.trim());
-        if (blockMatcher.find()) {
-            jsonStr = blockMatcher.group(1).trim();
-        }
-
-        // 2. 如果没有代码块，尝试直接提取 JSON 对象
-        if (jsonStr == null) {
-            Matcher objectMatcher = JSON_OBJECT_PATTERN.matcher(content.trim());
-            if (objectMatcher.find()) {
-                jsonStr = objectMatcher.group().trim();
-            }
-        }
-
-        // 3. 如果提取到了 JSON，尝试解析 score 和 feedback
-        if (jsonStr != null) {
-            try {
-                JsonNode root = objectMapper.readTree(jsonStr);
-                int score = Math.max(0, Math.min(root.path("score").asInt(0), maxScore));
-                JsonNode feedback = root.path("feedback");
-                String feedbackJson = feedback.isMissingNode() || feedback.isNull() ? null : objectMapper.writeValueAsString(feedback);
-                return AiScoringResult.of(score, feedbackJson);
-            } catch (Exception ex) {
-                log.warn("解析 AI 返回的 JSON 失败，尝试降级为纯数字解析。content={}", content, ex);
-            }
-        }
-
-        // 4. 向后兼容：纯数字解析
-        Matcher scoreMatcher = SCORE_PATTERN.matcher(content);
-        if (scoreMatcher.find()) {
-            int score = Integer.parseInt(scoreMatcher.group());
-            score = Math.max(0, Math.min(score, maxScore));
-            return AiScoringResult.of(score, null);
-        }
-
-        return AiScoringResult.fail();
-    }
 }

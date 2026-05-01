@@ -4,10 +4,34 @@ spring:
   profiles:
     active: dev
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: when_authorized
+
 jwt:
   secret: ${JWT_SECRET:change-me-cet4-platform-jwt-secret-key-32}
   expiration: 2592000000  # 30天，单位毫秒
 
+auth:
+  rate-limit:
+    login-ip-limit: 30
+    login-username-limit: 20
+    login-failure-limit: 5
+    register-ip-limit: 5
+    login-ip-window: 1m
+    login-username-window: 15m
+    login-lock-window: 15m
+    register-ip-window: 1h
+
+exam:
+  cache:
+    session-ttl: 130m
+    submit-lock-ttl: 3m
 
 ai:
   deepseek:

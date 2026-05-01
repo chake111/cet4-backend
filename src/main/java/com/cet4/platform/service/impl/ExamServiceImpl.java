@@ -1,496 +1,82 @@
 package com.cet4.platform.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.cet4.platform.common.BusinessException;
-import com.cet4.platform.domain.ExamStatus;
-import com.cet4.platform.domain.QuestionTypes;
-import com.cet4.platform.dto.AnswerItemDTO;
 import com.cet4.platform.dto.ExamDraftSaveRequest;
 import com.cet4.platform.dto.ExamStartRequest;
 import com.cet4.platform.dto.ExamSubmitRequest;
 import com.cet4.platform.dto.SubmitAnswerDTO;
-import com.cet4.platform.entity.Exam;
 import com.cet4.platform.entity.ExamRecord;
-import com.cet4.platform.entity.Question;
 import com.cet4.platform.entity.User;
-import com.cet4.platform.entity.UserAnswer;
-import com.cet4.platform.mapper.ExamMapper;
-import com.cet4.platform.mapper.ExamRecordMapper;
-import com.cet4.platform.mapper.QuestionMapper;
-import com.cet4.platform.mapper.UserAnswerMapper;
-import com.cet4.platform.mapper.UserMapper;
 import com.cet4.platform.service.ExamService;
-import com.cet4.platform.support.ExamCacheStore;
-import com.cet4.platform.support.ExamScoringSupport;
-import com.cet4.platform.support.ExamScoringSupport.ScoringResult;
-import com.cet4.platform.support.ExamSubmissionWriter;
-import com.cet4.platform.support.JsonSupport;
-import com.cet4.platform.vo.AnswerDetailVO;
+import com.cet4.platform.support.ExamQuerySupport;
+import com.cet4.platform.support.ExamRecordAccessSupport;
+import com.cet4.platform.support.ExamResultAssembler;
+import com.cet4.platform.support.ExamSessionManager;
+import com.cet4.platform.support.ExamSubmissionCoordinator;
+import com.cet4.platform.support.ExamUserSupport;
 import com.cet4.platform.vo.ExamRecordVO;
 import com.cet4.platform.vo.ExamResultVO;
 import com.cet4.platform.vo.ExamVO;
 import com.cet4.platform.vo.QuestionVO;
-import com.fasterxml.jackson.core.type.TypeReference;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class ExamServiceImpl implements ExamService {
 
-    private final ExamMapper examMapper;
-    private final QuestionMapper questionMapper;
-    private final ExamRecordMapper examRecordMapper;
-    private final UserMapper userMapper;
-    private final UserAnswerMapper userAnswerMapper;
-    private final ExamCacheStore examCacheStore;
-    private final ExamScoringSupport examScoringSupport;
-    private final ExamSubmissionWriter examSubmissionWriter;
-    private final JsonSupport jsonSupport;
+    private final ExamUserSupport examUserSupport;
+    private final ExamQuerySupport examQuerySupport;
+    private final ExamSessionManager examSessionManager;
+    private final ExamSubmissionCoordinator examSubmissionCoordinator;
+    private final ExamRecordAccessSupport examRecordAccessSupport;
+    private final ExamResultAssembler examResultAssembler;
 
     @Override
     public List<ExamVO> listPublishedExams() {
-        List<Exam> exams = examMapper.selectList(new LambdaQueryWrapper<Exam>()
-                .eq(Exam::getStatus, 1)
-                .orderByDesc(Exam::getYear)
-                .orderByDesc(Exam::getMonth)
-                .orderByDesc(Exam::getSetNo));
-
-        return exams.stream().map(exam -> {
-            ExamVO examVO = new ExamVO();
-            BeanUtils.copyProperties(exam, examVO);
-            return examVO;
-        }).toList();
+        return examQuerySupport.listPublishedExams();
     }
 
     @Override
     public List<QuestionVO> listExamQuestions(Long examId) {
-        List<Question> questions = questionMapper.selectList(new LambdaQueryWrapper<Question>()
-                .eq(Question::getExamId, examId)
-                .orderByAsc(Question::getSortOrder));
-
-        return questions.stream().map(question -> {
-            QuestionVO questionVO = new QuestionVO();
-            BeanUtils.copyProperties(question, questionVO);
-            return questionVO;
-        }).toList();
-    }
-
-    @Override
-    public Map<String, Long> startExam(Long examId, String username) {
-        User user = getUserByUsername(username);
-
-        ExamRecord existing = examRecordMapper.selectOne(new LambdaQueryWrapper<ExamRecord>()
-                .eq(ExamRecord::getUserId, user.getId())
-                .eq(ExamRecord::getExamId, examId)
-                .eq(ExamRecord::getStatus, ExamStatus.IN_PROGRESS)
-                .orderByDesc(ExamRecord::getId)
-                .last("limit 1"));
-
-        Long examRecordId;
-        if (existing != null) {
-            examRecordId = existing.getId();
-        } else {
-            ExamRecord examRecord = new ExamRecord();
-            examRecord.setUserId(user.getId());
-            examRecord.setExamId(examId);
-            examRecord.setStatus(ExamStatus.IN_PROGRESS);
-            examRecord.setStartTime(LocalDateTime.now());
-            examRecordMapper.insert(examRecord);
-            examRecordId = examRecord.getId();
-        }
-
-        Map<String, Long> result = new HashMap<>();
-        result.put("examRecordId", examRecordId);
-        return result;
+        return examQuerySupport.listExamQuestions(examId);
     }
 
     @Override
     public Map<String, Object> startExamSession(ExamStartRequest request, String username) {
-        User user = getUserByUsername(username);
-        Long examId = resolveExamIdByPaperId(request.getPaperId());
-
-        List<Question> questions = questionMapper.selectList(new LambdaQueryWrapper<Question>()
-                .eq(Question::getExamId, examId)
-                .orderByAsc(Question::getSortOrder));
-        if (questions.isEmpty()) {
-            throw new BusinessException("试卷未配置题目");
-        }
-
-        Map<String, List<QuestionVO>> questionsByStage = questions.stream().map(question -> {
-            QuestionVO questionVO = new QuestionVO();
-            BeanUtils.copyProperties(question, questionVO);
-            return questionVO;
-        }).collect(Collectors.groupingBy(
-                questionVO -> mapStageKey(questionVO.getPart()),
-                LinkedHashMap::new,
-                Collectors.toList()));
-
-        LocalDateTime startedAt = LocalDateTime.now();
-        examCacheStore.startSession(user.getId(), request.getPaperId(), startedAt);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("paperId", request.getPaperId());
-        result.put("questionsByStage", questionsByStage);
-        result.put("startedAt", startedAt);
-        return result;
-    }
-
-    private String mapStageKey(String part) {
-        if (part != null && part.startsWith("reading")) {
-            return QuestionTypes.READING_STAGE;
-        }
-        return part;
+        User user = examUserSupport.getUserByUsername(username);
+        return examSessionManager.startExamSession(request, user);
     }
 
     @Override
     public Map<String, Boolean> saveExamDraft(ExamDraftSaveRequest request, String username) {
-        User user = getUserByUsername(username);
-        Map<String, String> draft = examCacheStore.readDraft(user.getId(), request.getPaperId());
-        String mapKey = request.getStage() + ":" + request.getQuestionId();
-        draft.put(mapKey, request.getAnswer());
-        examCacheStore.saveDraft(user.getId(), request.getPaperId(), draft);
-
-        return Map.of("success", true);
+        User user = examUserSupport.getUserByUsername(username);
+        return examSessionManager.saveExamDraft(request, user);
     }
 
     @Override
     public Map<String, Object> submitExamSession(ExamSubmitRequest request, String username) {
-        User user = getUserByUsername(username);
-        Long examId = resolveExamIdByPaperId(request.getPaperId());
-
-        if (!examCacheStore.acquireSubmitLock(user.getId(), examId)) {
-            log.warn("重复提交被拦截: userId={}, examId={}", user.getId(), examId);
-            throw new BusinessException("请勿重复提交，请稍后再试");
-        }
-
-        boolean success = false;
-        try {
-        List<Question> questions = questionMapper.selectList(new LambdaQueryWrapper<Question>()
-                .eq(Question::getExamId, examId));
-        if (questions.isEmpty()) {
-            throw new BusinessException("试卷未配置题目");
-        }
-
-        Map<String, String> answers = request.getAnswers() == null ? Map.of() : request.getAnswers();
-        ScoringResult scoringResult = examScoringSupport.score(answers, questions);
-
-        LocalDateTime now = LocalDateTime.now();
-
-        LocalDateTime startTime = now;
-        try {
-            startTime = examCacheStore.readStartedAt(user.getId(), now);
-        } catch (Exception e) {
-            log.warn("解析 Redis session startedAt 失败，使用当前时间作为 startTime", e);
-        }
-
-        ExamRecord examRecord = examSubmissionWriter.saveSubmittedSession(
-                user,
-                examId,
-                request.getPaperId(),
-                startTime,
-                now,
-                answers,
-                questions,
-                scoringResult);
-
-        examCacheStore.clearSession(user.getId(), request.getPaperId());
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("recordId", examRecord.getId());
-        result.put("score", scoringResult.getScore());
-        result.put("total", scoringResult.getTotal());
-        success = true;
-        return result;
-        } finally {
-            if (!success) {
-                examCacheStore.releaseSubmitLock(user.getId(), examId);
-            }
-        }
+        User user = examUserSupport.getUserByUsername(username);
+        return examSubmissionCoordinator.submitExamSession(request, user);
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> submitExamRecord(Long recordId, String username, SubmitAnswerDTO submitAnswerDTO) {
-        User user = getUserByUsername(username);
-        ExamRecord examRecord = getAndValidateExamRecord(recordId, user.getId());
-
-        if (!examCacheStore.acquireSubmitLock(user.getId(), examRecord.getExamId())) {
-            log.warn("重复提交被拦截: userId={}, examId={}", user.getId(), examRecord.getExamId());
-            throw new BusinessException("请勿重复提交，请稍后再试");
-        }
-
-        boolean success = false;
-        try {
-        if (!ExamStatus.IN_PROGRESS.equals(examRecord.getStatus())) {
-            throw new BusinessException("考试记录状态不是 in_progress，无法提交");
-        }
-
-        List<AnswerItemDTO> answerItems = submitAnswerDTO == null || submitAnswerDTO.getAnswers() == null
-                ? List.of()
-                : submitAnswerDTO.getAnswers();
-
-        List<Long> questionIds = answerItems.stream()
-                .map(AnswerItemDTO::getQuestionId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-
-        Map<Long, Question> questionMap = questionIds.isEmpty()
-                ? Map.of()
-                : questionMapper.selectBatchIds(questionIds).stream()
-                .collect(Collectors.toMap(Question::getId, q -> q));
-
-        int totalObjectiveScore = 0;
-        for (AnswerItemDTO answerItem : answerItems) {
-            Long questionId = answerItem.getQuestionId();
-            if (questionId == null) {
-                throw new BusinessException("questionId 不能为空");
-            }
-
-            Question question = questionMap.get(questionId);
-            if (question == null || !Objects.equals(question.getExamId(), examRecord.getExamId())) {
-                throw new BusinessException("题目不存在或不属于当前考试");
-            }
-
-            UserAnswer userAnswer = new UserAnswer();
-            userAnswer.setExamRecordId(recordId);
-            userAnswer.setUserId(user.getId());
-            userAnswer.setQuestionId(questionId);
-            userAnswer.setUserAnswer(answerItem.getAnswer());
-
-            if (QuestionTypes.isObjective(question.getQuestionType())) {
-                boolean isCorrect = Objects.equals(ExamScoringSupport.normalizeAnswer(answerItem.getAnswer()),
-                        ExamScoringSupport.normalizeAnswer(question.getCorrectAnswer()));
-                int score = isCorrect ? question.getScore() : 0;
-                userAnswer.setIsCorrect(isCorrect ? 1 : 0);
-                userAnswer.setScore(score);
-                totalObjectiveScore += score;
-            }
-
-            userAnswerMapper.insert(userAnswer);
-        }
-
-        examRecord.setTotalScore(totalObjectiveScore);
-        examRecord.setStatus(ExamStatus.SUBMITTED);
-        examRecord.setSubmitTime(LocalDateTime.now());
-        examRecordMapper.updateById(examRecord);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("totalScore", totalObjectiveScore);
-        result.put("examRecordId", recordId);
-        success = true;
-        return result;
-        } finally {
-            if (!success) {
-                examCacheStore.releaseSubmitLock(user.getId(), examRecord.getExamId());
-            }
-        }
+        User user = examUserSupport.getUserByUsername(username);
+        return examSubmissionCoordinator.submitExamRecord(recordId, user, submitAnswerDTO);
     }
 
     @Override
     public ExamResultVO getExamResult(Long recordId, String username) {
-        User user = getUserByUsername(username);
-        ExamRecord examRecord = getAndValidateExamRecord(recordId, user.getId());
-
-        ExamResultVO resultVO = new ExamResultVO();
-        resultVO.setRecordId(examRecord.getId());
-        resultVO.setScore(examRecord.getTotalScore());
-        resultVO.setPaperId(examRecord.getPaperId());
-        resultVO.setStartTime(examRecord.getStartTime());
-        resultVO.setSubmittedAt(examRecord.getSubmitTime());
-
-        // Get exam for total score (instead of hardcoding 710)
-        Exam exam = examMapper.selectById(examRecord.getExamId());
-        resultVO.setTotal(exam != null && exam.getTotalScore() != null ? exam.getTotalScore() : 710);
-
-        // Keep backward compatibility: flat answers map
-        Map<String, Object> answerMap = examRecord.getAnswers() == null || examRecord.getAnswers().isBlank()
-                ? Map.of()
-                : jsonSupport.fromJson(examRecord.getAnswers(), new TypeReference<>() {
-                });
-        resultVO.setAnswers(answerMap);
-
-        // Query all questions for this exam
-        List<Question> questions = questionMapper.selectList(new LambdaQueryWrapper<Question>()
-                .eq(Question::getExamId, examRecord.getExamId())
-                .orderByAsc(Question::getSortOrder));
-
-        // Query user_answer records for this record
-        List<UserAnswer> userAnswers = userAnswerMapper.selectList(new LambdaQueryWrapper<UserAnswer>()
-                .eq(UserAnswer::getExamRecordId, recordId));
-        Map<Long, UserAnswer> userAnswerMap = userAnswers.stream()
-                .collect(Collectors.toMap(UserAnswer::getQuestionId, ua -> ua, (a, b) -> a));
-
-        // Assemble answerDetails and compute statistics
-        List<AnswerDetailVO> answerDetails = new ArrayList<>();
-        int objectiveScore = 0;
-        int subjectiveScore = 0;
-        int objectiveCorrect = 0;
-        int objectiveTotal = 0;
-
-        for (Question question : questions) {
-            AnswerDetailVO detail = new AnswerDetailVO();
-            detail.setQuestionId(question.getId());
-            detail.setQuestionNo(question.getQuestionNo());
-            detail.setPart(question.getPart());
-            detail.setQuestionType(question.getQuestionType());
-            detail.setContent(question.getContent());
-            detail.setFullScore(question.getScore());
-            detail.setCorrectAnswer(question.getCorrectAnswer());
-
-            UserAnswer ua = userAnswerMap.get(question.getId());
-            boolean subjective = QuestionTypes.isSubjective(question.getQuestionType());
-
-            if (ua != null) {
-                detail.setUserAnswer(ua.getUserAnswer());
-                detail.setScore(ua.getScore());
-                detail.setAiFeedback(ua.getAiFeedback());
-                if (subjective) {
-                    detail.setCorrect(null);
-                    subjectiveScore += (ua.getScore() != null ? ua.getScore() : 0);
-                } else {
-                    boolean isCorrect = ua.getIsCorrect() != null && ua.getIsCorrect() == 1;
-                    detail.setCorrect(isCorrect);
-                    objectiveScore += (ua.getScore() != null ? ua.getScore() : 0);
-                    String correctAnswer = question.getCorrectAnswer();
-                    if (correctAnswer != null && !correctAnswer.isBlank()) {
-                        objectiveTotal++;
-                        if (isCorrect) {
-                            objectiveCorrect++;
-                        }
-                    }
-                }
-            } else {
-                // No user_answer record (old records or unanswered)
-                detail.setUserAnswer(null);
-                detail.setScore(0);
-                if (subjective) {
-                    detail.setCorrect(null);
-                } else {
-                    String correctAnswer = question.getCorrectAnswer();
-                    if (correctAnswer != null && !correctAnswer.isBlank()) {
-                        detail.setCorrect(false);
-                        objectiveTotal++;
-                    } else {
-                        detail.setCorrect(null);
-                    }
-                }
-            }
-
-            answerDetails.add(detail);
-        }
-
-        // If no user_answer records exist (old records), compute subjectiveScore from total
-        if (userAnswers.isEmpty() && examRecord.getTotalScore() != null) {
-            subjectiveScore = examRecord.getTotalScore() - objectiveScore;
-        }
-
-        resultVO.setObjectiveScore(objectiveScore);
-        resultVO.setSubjectiveScore(subjectiveScore);
-        resultVO.setObjectiveCorrect(objectiveCorrect);
-        resultVO.setObjectiveTotal(objectiveTotal);
-        resultVO.setAnswerDetails(answerDetails);
-
-        return resultVO;
-    }
-
-    private User getUserByUsername(String username) {
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getUsername, username)
-                .last("limit 1"));
-
-        if (user == null) {
-            throw new BusinessException("用户不存在");
-        }
-        return user;
-    }
-
-    private ExamRecord getAndValidateExamRecord(Long recordId, Long userId) {
-        ExamRecord examRecord = examRecordMapper.selectById(recordId);
-        if (examRecord == null) {
-            throw new BusinessException("考试记录不存在");
-        }
-        if (!Objects.equals(examRecord.getUserId(), userId)) {
-            throw new AccessDeniedException("无权访问该考试记录");
-        }
-        return examRecord;
-    }
-
-    private Long resolveExamIdByPaperId(String paperId) {
-        try {
-            return Long.parseLong(paperId);
-        } catch (NumberFormatException ignored) {
-            List<String> segments = List.of(paperId.split("-"));
-            if (segments.size() != 3) {
-                throw new BusinessException("paperId 格式不正确");
-            }
-            Integer year = parsePaperIdPart(segments.get(0), "year");
-            Integer month = parsePaperIdPart(segments.get(1), "month");
-            Integer setNo = parsePaperIdPart(segments.get(2), "setNo");
-            Exam exam = examMapper.selectOne(new LambdaQueryWrapper<Exam>()
-                    .eq(Exam::getYear, year)
-                    .eq(Exam::getMonth, month)
-                    .eq(Exam::getSetNo, setNo)
-                    .last("limit 1"));
-            if (exam == null) {
-                throw new BusinessException("paperId 对应试卷不存在");
-            }
-            return exam.getId();
-        }
-    }
-
-    private Integer parsePaperIdPart(String value, String partName) {
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException ex) {
-            throw new BusinessException("paperId 的 " + partName + " 部分不合法");
-        }
+        User user = examUserSupport.getUserByUsername(username);
+        ExamRecord examRecord = examRecordAccessSupport.getAndValidateExamRecord(recordId, user.getId());
+        return examResultAssembler.assemble(examRecord);
     }
 
     @Override
     public List<ExamRecordVO> listUserRecords(String username) {
-        User user = getUserByUsername(username);
-
-        List<ExamRecord> records = examRecordMapper.selectList(
-            new LambdaQueryWrapper<ExamRecord>()
-                .eq(ExamRecord::getUserId, user.getId())
-                .eq(ExamRecord::getStatus, ExamStatus.SUBMITTED)
-                .orderByDesc(ExamRecord::getCreatedAt)
-        );
-
-        return records.stream().map(record -> {
-            ExamRecordVO vo = new ExamRecordVO();
-            vo.setRecordId(record.getId());
-            vo.setTotalScore(record.getTotalScore());
-            vo.setStatus(record.getStatus());
-            vo.setStartTime(record.getStartTime());
-            vo.setSubmitTime(record.getSubmitTime());
-
-            Exam exam = examMapper.selectById(record.getExamId());
-            if (exam != null) {
-                vo.setTitle(exam.getTitle());
-                vo.setYear(exam.getYear());
-                vo.setMonth(exam.getMonth());
-                vo.setSetNo(exam.getSetNo());
-                vo.setFullScore(exam.getTotalScore());
-            }
-
-            return vo;
-        }).collect(Collectors.toList());
+        User user = examUserSupport.getUserByUsername(username);
+        return examQuerySupport.listUserRecords(user.getId());
     }
-
 }

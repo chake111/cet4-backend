@@ -39,6 +39,28 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: 2592000000  # 30天，单位毫秒
 
+auth:
+  rate-limit:
+    login-ip-limit: ${AUTH_LOGIN_IP_LIMIT:30}
+    login-username-limit: ${AUTH_LOGIN_USERNAME_LIMIT:20}
+    login-failure-limit: ${AUTH_LOGIN_FAILURE_LIMIT:5}
+    register-ip-limit: ${AUTH_REGISTER_IP_LIMIT:5}
+    login-ip-window: ${AUTH_LOGIN_IP_WINDOW:1m}
+    login-username-window: ${AUTH_LOGIN_USERNAME_WINDOW:15m}
+    login-lock-window: ${AUTH_LOGIN_LOCK_WINDOW:15m}
+    register-ip-window: ${AUTH_REGISTER_IP_WINDOW:1h}
+
+exam:
+  cache:
+    session-ttl: ${EXAM_SESSION_TTL:130m}
+    submit-lock-ttl: ${EXAM_SUBMIT_LOCK_TTL:3m}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
 ai:
   deepseek:
     api-key: ${DEEPSEEK_API_KEY}
