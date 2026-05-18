@@ -1,0 +1,94 @@
+[INFO] Scanning for projects...
+Downloading from central: https://repo.maven.apache.org/maven2/org/springframework/boot/maven-metadata.xml
+Downloading from central: https://repo.maven.apache.org/maven2/io/github/git-commit-id/maven-metadata.xml
+Downloading from central: https://repo.maven.apache.org/maven2/org/cyclonedx/maven-metadata.xml
+Downloading from central: https://repo.maven.apache.org/maven2/org/flywaydb/maven-metadata.xml
+Progress (1): 249 BProgress (2): 249 B | 255 BProgress (3): 249 B | 255 B | 234 BProgress (4): 249 B | 255 B | 234 B | 243 B                                           Downloaded from central: https://repo.maven.apache.org/maven2/org/flywaydb/maven-metadata.xml (234 B at 285 B/s)
+Downloaded from central: https://repo.maven.apache.org/maven2/io/github/git-commit-id/maven-metadata.xml (255 B at 310 B/s)
+Downloaded from central: https://repo.maven.apache.org/maven2/org/springframework/boot/maven-metadata.xml (249 B at 303 B/s)
+Downloaded from central: https://repo.maven.apache.org/maven2/org/cyclonedx/maven-metadata.xml (243 B at 295 B/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/liquibase/maven-metadata.xml
+Downloading from central: https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/maven-metadata.xml
+Downloading from central: https://repo.maven.apache.org/maven2/org/jooq/maven-metadata.xml
+Downloading from central: https://repo.maven.apache.org/maven2/org/graalvm/buildtools/maven-metadata.xml
+Progress (1): 398 B                   Downloaded from central: https://repo.maven.apache.org/maven2/org/jooq/maven-metadata.xml (398 B at 2.0 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-metadata.xml
+Progress (1): 394 B                   Downloaded from central: https://repo.maven.apache.org/maven2/org/liquibase/maven-metadata.xml (394 B at 1.9 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/mojo/maven-metadata.xml
+Progress (1): 242 BProgress (2): 242 B | 375 B                           Downloaded from central: https://repo.maven.apache.org/maven2/org/graalvm/buildtools/maven-metadata.xml (242 B at 1.2 kB/s)
+Downloaded from central: https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/maven-metadata.xml (375 B at 1.7 kB/s)
+Progress (1): 3.8 kBProgress (1): 9.3 kBProgress (1): 14 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-metadata.xml (14 kB at 69 kB/s)
+Progress (1): 3.3 kBProgress (1): 7.9 kBProgress (1): 12 kB Progress (1): 16 kBProgress (1): 20 kBProgress (1): 21 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/mojo/maven-metadata.xml (21 kB at 49 kB/s)
+[INFO] 
+[INFO] -----------------------< com.cet4:cet4-backend >------------------------
+[INFO] Building cet4-backend 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:3.5.13:run (default-cli) > test-compile @ cet4-backend >>>
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ cet4-backend ---
+[INFO] Copying 4 resources from src\main\resources to target\classes
+[INFO] Copying 16 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ cet4-backend ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ cet4-backend ---
+[INFO] skip non existing resourceDirectory E:\Git_repo\cet4-backend\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ cet4-backend ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] <<< spring-boot:3.5.13:run (default-cli) < test-compile @ cet4-backend <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:3.5.13:run (default-cli) @ cet4-backend ---
+[INFO] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.13)
+
+2026-05-04T12:30:07.851+08:00  INFO 18144 --- [cet4-backend] [           main] c.cet4.platform.Cet4BackendApplication   : Starting Cet4BackendApplication using Java 21.0.5 with PID 18144 (E:\Git_repo\cet4-backend\target\classes started by chake in E:\Git_repo\cet4-backend)
+2026-05-04T12:30:07.852+08:00  INFO 18144 --- [cet4-backend] [           main] c.cet4.platform.Cet4BackendApplication   : The following 1 profile is active: "dev"
+2026-05-04T12:30:08.450+08:00  INFO 18144 --- [cet4-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-05-04T12:30:08.462+08:00  INFO 18144 --- [cet4-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-05-04T12:30:08.490+08:00  INFO 18144 --- [cet4-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 17 ms. Found 0 Redis repository interfaces.
+2026-05-04T12:30:08.879+08:00  INFO 18144 --- [cet4-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-05-04T12:30:08.898+08:00  INFO 18144 --- [cet4-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-05-04T12:30:08.899+08:00  INFO 18144 --- [cet4-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.53]
+2026-05-04T12:30:08.956+08:00  INFO 18144 --- [cet4-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-05-04T12:30:08.957+08:00  INFO 18144 --- [cet4-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1078 ms
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.5.7 
+2026-05-04T12:30:09.663+08:00  INFO 18144 --- [cet4-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-05-04T12:30:09.676+08:00  WARN 18144 --- [cet4-backend] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
+
+Using generated security password: 5f612340-89d7-49cd-b41e-3dfc697fc085
+
+This generated password is for development use only. Your security configuration must be updated before running your application in production.
+
+2026-05-04T12:30:09.681+08:00  INFO 18144 --- [cet4-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager
+2026-05-04T12:30:09.903+08:00  INFO 18144 --- [cet4-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-05-04T12:30:09.912+08:00  INFO 18144 --- [cet4-backend] [           main] c.cet4.platform.Cet4BackendApplication   : Started Cet4BackendApplication in 2.366 seconds (process running for 2.672)
+2026-05-04T12:30:36.050+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-04T12:30:36.051+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-05-04T12:30:36.052+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-05-04T12:31:11.823+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-3] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-05-04T12:31:12.036+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-3] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@11e4fbc0
+2026-05-04T12:31:12.038+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-3] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-05-04T12:31:37.452+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-6] c.c.platform.support.ExamSessionManager  : 考试开始: userId=7, examId=9, paperId=9
+2026-05-04T12:31:39.083+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-7] c.c.platform.support.ExamSessionManager  : 考试开始: userId=7, examId=9, paperId=9
+2026-05-04T12:31:45.282+08:00  INFO 18144 --- [cet4-backend] [io-8080-exec-10] c.c.p.support.ExamSubmissionCoordinator  : 考试提交成功: userId=7, examId=9, recordId=20, score=0, total=597
+2026-05-04T12:31:52.349+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-2] c.c.platform.support.ExamSessionManager  : 考试开始: userId=7, examId=1, paperId=1
+2026-05-04T12:32:10.518+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-3] c.c.platform.support.ExamSessionManager  : 考试草稿已保存: userId=7, paperId=1, stage=translation, questionId=57
+2026-05-04T12:32:16.477+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-4] c.c.p.service.impl.AiScoringServiceImpl  : AI评分完成: questionType=translation, maxScore=106, score=95, hasFeedback=true
+2026-05-04T12:32:16.522+08:00  INFO 18144 --- [cet4-backend] [nio-8080-exec-4] c.c.p.support.ExamSubmissionCoordinator  : 考试提交成功: userId=7, examId=1, recordId=21, score=95, total=597
